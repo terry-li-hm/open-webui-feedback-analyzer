@@ -32,7 +32,7 @@ python analyzer.py <input_file> -s <start_date> -e <end_date> [options]
 | Argument | Default | Description |
 |----------|---------|-------------|
 | `-o, --output-dir` | `.` | Output directory for exported files |
-| `--timezone` | `UTC` | Timezone for date interpretation |
+| `--timezone` | `Asia/Hong_Kong` | Timezone for date interpretation |
 | `--no-export` | - | Skip exporting filtered data and statistics |
 | `-q, --quiet` | - | Suppress output (only show errors) |
 | `-v, --verbose` | - | Enable verbose logging |

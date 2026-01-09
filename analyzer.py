@@ -18,7 +18,7 @@ from typing import Any
 import pandas as pd
 
 # Constants
-DEFAULT_TIMEZONE = "UTC"
+DEFAULT_TIMEZONE = "Asia/Hong_Kong"
 RATING_THUMBS_UP = 1
 RATING_THUMBS_DOWN = -1
 TIMESTAMP_UNIT = "s"

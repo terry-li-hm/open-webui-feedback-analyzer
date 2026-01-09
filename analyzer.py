@@ -660,16 +660,28 @@ def print_statistics(stats: dict) -> None:
                 short_date = _format_date_short(date)
                 print(f"  {short_date:<15} {count:>5}  {_format_bar(count, max_count)}")
 
-    # Day of week
+    # Day of week (horizontal display)
     by_dow = temporal.get("by_day_of_week", {})
     if by_dow:
         print(f"\nBY DAY OF WEEK")
-        max_count = max(by_dow.values(), default=1)
         day_order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-        for day in day_order:
-            if day in by_dow:
-                count = by_dow[day]
-                print(f"  {day:<12} {count:>5}  {_format_bar(count, max_count)}")
+        day_abbrev = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        counts = [by_dow.get(day, 0) for day in day_order]
+        max_count = max(counts) if counts else 1
+
+        # Header row (day abbreviations)
+        print("  " + "".join(f"{d:>6}" for d in day_abbrev))
+        # Count row
+        print("  " + "".join(f"{c:>6}" for c in counts))
+        # Bar row
+        bar_height = 5
+        for row in range(bar_height, 0, -1):
+            threshold = (row / bar_height) * max_count
+            bars = "".join(
+                f"{'  ##  ' if c >= threshold else '      '}"
+                for c in counts
+            )
+            print("  " + bars)
 
     # Detailed Ratings (1-10)
     detailed = stats.get("detailed_ratings", {})

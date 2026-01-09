@@ -1377,9 +1377,16 @@ def generate_chart_image(stats: dict, filepath: Path) -> None:
     # Create figure with dual y-axes
     fig, ax1 = plt.subplots(figsize=(12, 6))
 
-    # Style
-    plt.style.use('seaborn-v0_8-whitegrid')
+    # Style - use a compatible style
+    try:
+        plt.style.use('seaborn-v0_8-whitegrid')
+    except OSError:
+        try:
+            plt.style.use('seaborn-whitegrid')
+        except OSError:
+            plt.style.use('ggplot')  # Fallback to always-available style
     fig.patch.set_facecolor('white')
+    ax1.set_facecolor('white')
 
     # X-axis positions
     x = range(len(months))

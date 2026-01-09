@@ -1468,17 +1468,15 @@ def generate_chart_image(stats: dict, filepath: Path) -> None:
                         frameon=True, fancybox=True, shadow=False,
                         edgecolor=grid_color)
 
-    # Summary box (top right, below title)
+    # Summary box (top left to avoid overlapping with data on right side)
     total_vol = sum(volumes)
-    avg_acc = sum(accuracies) / len(accuracies)
-    latest_acc = accuracies[-1]
 
-    summary_text = f'Total Feedback: {total_vol:,}   |   Average Accuracy: {avg_acc:.1f}%'
+    summary_text = f'Total Feedback: {total_vol:,}'
 
-    props = dict(boxstyle='round,pad=0.5', facecolor='white', edgecolor=grid_color,
+    props = dict(boxstyle='round,pad=0.4', facecolor='white', edgecolor=grid_color,
                  linewidth=1.5, alpha=0.95)
-    ax1.text(0.98, 0.97, summary_text, transform=ax1.transAxes, fontsize=11,
-             verticalalignment='top', horizontalalignment='right', bbox=props,
+    ax1.text(0.02, 0.97, summary_text, transform=ax1.transAxes, fontsize=11,
+             verticalalignment='top', horizontalalignment='left', bbox=props,
              color=text_color, fontweight='500')
 
     plt.tight_layout()

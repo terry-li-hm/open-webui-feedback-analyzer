@@ -1020,6 +1020,41 @@ def generate_html_report(stats: dict, df: pd.DataFrame, filepath: Path) -> None:
         fig2.update_yaxes(title_text="Accuracy (%)", secondary_y=True, range=[0, 100])
         figures_html.append(fig2.to_html(full_html=False, include_plotlyjs=False))
 
+    # --- Figure 2b: Monthly Trend ---
+    by_month = temporal.get("by_month", {})
+    if by_month and len(by_month) > 1:
+        months = list(by_month.keys())[-12:]  # Last 12 months
+        month_volumes = [by_month[m] for m in months]
+
+        # Calculate monthly accuracy
+        df_copy = df.copy()
+        df_copy["month_str"] = df_copy["created_at"].dt.to_period("M").astype(str)
+        monthly_acc = df_copy.groupby("month_str").apply(
+            lambda x: (x["data"].apply(lambda d: safe_get(d, "rating")) == RATING_THUMBS_UP).sum() / len(x) if len(x) > 0 else 0
+        ).to_dict()
+        month_accuracies = [monthly_acc.get(m, 0) * 100 for m in months]
+
+        fig2b = make_subplots(specs=[[{"secondary_y": True}]])
+        fig2b.add_trace(
+            go.Bar(name="Volume", x=months, y=month_volumes, marker_color=colors["warning"], opacity=0.7),
+            secondary_y=False,
+        )
+        fig2b.add_trace(
+            go.Scatter(name="Accuracy %", x=months, y=month_accuracies, mode="lines+markers",
+                      line=dict(color=colors["success"], width=3), marker=dict(size=8)),
+            secondary_y=True,
+        )
+        fig2b.update_layout(
+            title="Monthly Volume & Accuracy Trend",
+            xaxis_title="Month",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            hovermode="x unified",
+            template="plotly_white",
+        )
+        fig2b.update_yaxes(title_text="Feedback Volume", secondary_y=False)
+        fig2b.update_yaxes(title_text="Accuracy (%)", secondary_y=True, range=[0, 100])
+        figures_html.append(fig2b.to_html(full_html=False, include_plotlyjs=False))
+
     # --- Figure 3: Rating Distribution (Pie) ---
     fig3 = go.Figure(data=[go.Pie(
         labels=["Thumbs Up (Accurate)", "Thumbs Down (Inaccurate)"],

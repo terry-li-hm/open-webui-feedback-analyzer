@@ -1403,9 +1403,9 @@ def generate_chart_image(stats: dict, filepath: Path) -> None:
     bars = ax1.bar(x, volumes, color=vol_color, alpha=0.85, width=bar_width,
                    edgecolor='white', linewidth=1.5, label='Feedback Volume', zorder=3)
 
-    # Style left y-axis
-    ax1.set_ylabel('Feedback Volume', fontsize=13, fontweight='600', color=text_color, labelpad=15)
-    ax1.tick_params(axis='y', colors=text_color, labelsize=11)
+    # Style left y-axis (hide labels since values are on bars)
+    ax1.set_ylabel('')
+    ax1.tick_params(axis='y', left=False, labelleft=False)
     ax1.set_ylim(0, max(volumes) * 1.25)
 
     # X-axis labels (Month Year format)
@@ -1426,11 +1426,10 @@ def generate_chart_image(stats: dict, filepath: Path) -> None:
                     markersize=12, label='Accuracy Rate', markerfacecolor='white',
                     markeredgewidth=3, markeredgecolor=acc_color, zorder=5)
 
-    # Style right y-axis
-    ax2.set_ylabel('Accuracy Rate (%)', fontsize=13, fontweight='600', color=text_color, labelpad=15)
-    ax2.tick_params(axis='y', colors=text_color, labelsize=11)
+    # Style right y-axis (hide labels since values are on line)
+    ax2.set_ylabel('')
+    ax2.tick_params(axis='y', right=False, labelright=False)
     ax2.set_ylim(0, 105)
-    ax2.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f'{y:.0f}%'))
 
     # Accuracy labels
     for i, acc in enumerate(accuracies):
@@ -1467,27 +1466,21 @@ def generate_chart_image(stats: dict, filepath: Path) -> None:
                         frameon=True, fancybox=True, shadow=False,
                         edgecolor=grid_color)
 
-    # Summary box
+    # Summary box (top right, below title)
     total_vol = sum(volumes)
     avg_acc = sum(accuracies) / len(accuracies)
     latest_acc = accuracies[-1]
-    first_acc = accuracies[0]
-    acc_change = latest_acc - first_acc
-    change_symbol = "+" if acc_change >= 0 else ""
-    change_color = acc_color if acc_change >= 0 else '#E74C3C'
 
-    summary_text = (f'Total: {total_vol:,}  |  '
-                   f'Avg: {avg_acc:.1f}%  |  '
-                   f'Change: {change_symbol}{acc_change:.1f}pp')
+    summary_text = f'Total Feedback: {total_vol:,}   |   Average Accuracy: {avg_acc:.1f}%'
 
     props = dict(boxstyle='round,pad=0.5', facecolor='white', edgecolor=grid_color,
                  linewidth=1.5, alpha=0.95)
-    ax1.text(0.5, 1.08, summary_text, transform=ax1.transAxes, fontsize=12,
-             verticalalignment='center', horizontalalignment='center', bbox=props,
+    ax1.text(0.98, 0.97, summary_text, transform=ax1.transAxes, fontsize=11,
+             verticalalignment='top', horizontalalignment='right', bbox=props,
              color=text_color, fontweight='500')
 
     plt.tight_layout()
-    plt.subplots_adjust(bottom=0.15, top=0.85)
+    plt.subplots_adjust(bottom=0.15, top=0.88)
 
     try:
         plt.savefig(filepath, dpi=150, bbox_inches='tight', facecolor='white',

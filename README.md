@@ -32,7 +32,7 @@ python analyzer.py <input_file> -s <start_date> -e <end_date> [options]
 | Argument | Default | Description |
 |----------|---------|-------------|
 | `-o, --output-dir` | `.` | Output directory for exported files |
-| `--timezone` | `Asia/Hong_Kong` | Timezone for date interpretation |
+| `--timezone` | `UTC` | Timezone for date interpretation |
 | `--no-export` | - | Skip exporting filtered data and statistics |
 | `-q, --quiet` | - | Suppress output (only show errors) |
 | `-v, --verbose` | - | Enable verbose logging |
@@ -53,12 +53,17 @@ The analyzer generates two output files:
 
 1. `{start_date}-{end_date}-data.json` - Filtered feedback records
 2. `{start_date}-{end_date}-statistics.json` - Comprehensive statistics including:
-   - Overview (total records, date range, archived/pinned counts)
-   - Rating analysis (thumbs up/down distribution, detailed ratings)
-   - Reason analysis (distribution and positive rate by reason)
-   - Model analysis (distribution and positive rate by model)
-   - Temporal analysis (by hour, day of week, date)
-   - RAG analysis (actions, sources retrieved, queries generated)
+   - **Overview** - Total records, date range, archived/pinned counts
+   - **Rating analysis** - Thumbs up/down distribution and rates
+   - **Detailed ratings** - 1-10 scale distribution, average, median
+   - **Reason analysis** - Distribution and positive rate by reason
+   - **Model analysis** - Distribution and positive rate by model
+   - **Temporal analysis** - By hour, day of week, date
+   - **RAG analysis** - Actions, sources retrieved, queries generated
+   - **Comment analysis** - Comments on negative feedback
+   - **Feedback position** - Where in conversations feedback occurs
+   - **Tag analysis** - Tag usage distribution
+   - **File analysis** - Correlation between file attachments and ratings
 
 ## Running Tests
 
@@ -66,3 +71,11 @@ The analyzer generates two output files:
 pip install -r requirements-dev.txt
 pytest test_analyzer.py -v
 ```
+
+## Schema Documentation
+
+See [SCHEMA.md](SCHEMA.md) for detailed documentation of the feedback data structure exported by Open WebUI.
+
+## License
+
+MIT License - see [LICENSE](LICENSE) for details.

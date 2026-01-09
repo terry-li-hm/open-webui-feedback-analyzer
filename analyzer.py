@@ -18,7 +18,7 @@ from typing import Any
 import pandas as pd
 
 # Constants
-DEFAULT_TIMEZONE = "Asia/Hong_Kong"
+DEFAULT_TIMEZONE = "UTC"
 RATING_THUMBS_UP = 1
 RATING_THUMBS_DOWN = -1
 TIMESTAMP_UNIT = "s"
@@ -330,6 +330,131 @@ def _analyze_rag(df: pd.DataFrame) -> dict:
     return stats
 
 
+def _analyze_comments(df: pd.DataFrame) -> dict:
+    """Analyze user comments, especially on negative feedback."""
+    comments = df["data"].apply(lambda x: safe_get(x, "comment"))
+    ratings = df["data"].apply(lambda x: safe_get(x, "rating"))
+
+    # Filter non-empty comments
+    has_comment = comments.apply(lambda x: bool(x and str(x).strip()))
+    comments_df = pd.DataFrame({
+        "comment": comments,
+        "rating": ratings,
+        "has_comment": has_comment
+    })
+
+    stats: dict[str, Any] = {
+        "total_with_comments": int(has_comment.sum()),
+        "comment_rate": has_comment.sum() / len(df) if len(df) > 0 else 0,
+    }
+
+    # Comments on negative feedback (most useful for improvement)
+    negative_with_comments = comments_df[
+        (comments_df["rating"] == RATING_THUMBS_DOWN) & (comments_df["has_comment"])
+    ]
+    if len(negative_with_comments) > 0:
+        stats["negative_feedback_comments"] = negative_with_comments["comment"].tolist()
+
+    return stats
+
+
+def _analyze_feedback_position(df: pd.DataFrame) -> dict:
+    """Analyze where in conversations feedback typically occurs."""
+    if "meta" not in df.columns:
+        return {}
+
+    positions = df["meta"].apply(lambda x: safe_get(x, "message_index"))
+    valid_positions = positions.dropna()
+
+    if len(valid_positions) == 0:
+        return {}
+
+    ratings = df["data"].apply(lambda x: safe_get(x, "rating"))
+    position_df = pd.DataFrame({"position": positions, "rating": ratings}).dropna()
+
+    stats = {
+        "average_position": valid_positions.mean(),
+        "position_distribution": valid_positions.value_counts().sort_index().to_dict(),
+    }
+
+    # Average position by rating
+    if len(position_df) > 0:
+        avg_by_rating = position_df.groupby("rating")["position"].mean().to_dict()
+        stats["average_position_by_rating"] = {
+            "thumbs_up": avg_by_rating.get(RATING_THUMBS_UP, 0),
+            "thumbs_down": avg_by_rating.get(RATING_THUMBS_DOWN, 0),
+        }
+
+    return stats
+
+
+def _analyze_detailed_ratings(df: pd.DataFrame) -> dict:
+    """Analyze detailed 1-10 ratings distribution."""
+    if "details" not in df.columns:
+        return {}
+
+    detailed = df["details"].apply(lambda x: safe_get(x, "rating"))
+    valid = detailed.dropna()
+
+    if len(valid) == 0:
+        return {}
+
+    return {
+        "count": len(valid),
+        "average": valid.mean(),
+        "median": valid.median(),
+        "distribution": valid.value_counts().sort_index().to_dict(),
+    }
+
+
+def _analyze_tags(df: pd.DataFrame) -> dict:
+    """Analyze tag usage in feedback."""
+    tags_series = df["data"].apply(lambda x: safe_get(x, "tags", default=[]))
+
+    all_tags: list[str] = []
+    for tags in tags_series:
+        if isinstance(tags, list):
+            all_tags.extend(tags)
+
+    if not all_tags:
+        return {}
+
+    return {
+        "total_tags": len(all_tags),
+        "unique_tags": len(set(all_tags)),
+        "distribution": dict(Counter(all_tags)),
+    }
+
+
+def _analyze_files(df: pd.DataFrame) -> dict:
+    """Analyze file attachment correlation with ratings."""
+    if "snapshot" not in df.columns:
+        return {}
+
+    def has_files(snapshot):
+        files = safe_get(snapshot, "files", default=[])
+        return bool(files and len(files) > 0)
+
+    file_attached = df["snapshot"].apply(has_files)
+    ratings = df["data"].apply(lambda x: safe_get(x, "rating"))
+
+    stats = {
+        "conversations_with_files": int(file_attached.sum()),
+        "file_attachment_rate": file_attached.sum() / len(df) if len(df) > 0 else 0,
+    }
+
+    # Rating comparison: with files vs without
+    with_files = ratings[file_attached]
+    without_files = ratings[~file_attached]
+
+    if len(with_files) > 0:
+        stats["thumbs_up_rate_with_files"] = (with_files == RATING_THUMBS_UP).sum() / len(with_files)
+    if len(without_files) > 0:
+        stats["thumbs_up_rate_without_files"] = (without_files == RATING_THUMBS_UP).sum() / len(without_files)
+
+    return stats
+
+
 def generate_statistics(df: pd.DataFrame) -> dict:
     """Generate comprehensive statistics from feedback data.
 
@@ -344,10 +469,15 @@ def generate_statistics(df: pd.DataFrame) -> dict:
     return {
         "overview": _analyze_overview(df),
         "rating_analysis": _analyze_ratings(df),
+        "detailed_ratings": _analyze_detailed_ratings(df),
         "reason_analysis": _analyze_reasons(df),
         "model_analysis": _analyze_models(df),
         "temporal_analysis": _analyze_temporal(df),
         "rag_analysis": _analyze_rag(df),
+        "comment_analysis": _analyze_comments(df),
+        "feedback_position": _analyze_feedback_position(df),
+        "tag_analysis": _analyze_tags(df),
+        "file_analysis": _analyze_files(df),
     }
 
 
@@ -479,6 +609,66 @@ def print_statistics(stats: dict) -> None:
             if day in by_dow:
                 count = by_dow[day]
                 print(f"  {day:<12} {count:>5}  {_format_bar(count, max_count)}")
+
+    # Detailed Ratings (1-10)
+    detailed = stats.get("detailed_ratings", {})
+    if detailed.get("distribution"):
+        print(f"\nDETAILED RATINGS (1-10)")
+        print(f"  {'Average:':<20} {detailed['average']:>5.1f}")
+        print(f"  {'Median:':<20} {detailed['median']:>5.0f}")
+        dist = detailed["distribution"]
+        max_count = max(dist.values(), default=1)
+        for rating in sorted(dist.keys()):
+            count = dist[rating]
+            print(f"  {int(rating):<20} {count:>5}  {_format_bar(count, max_count)}")
+
+    # Feedback Position
+    position = stats.get("feedback_position", {})
+    if position.get("average_position") is not None:
+        print(f"\nFEEDBACK POSITION")
+        print(f"  {'Avg message index:':<20} {position['average_position']:>5.1f}")
+        if "average_position_by_rating" in position:
+            pos_by_rating = position["average_position_by_rating"]
+            print(f"  {'Avg for thumbs up:':<20} {pos_by_rating.get('thumbs_up', 0):>5.1f}")
+            print(f"  {'Avg for thumbs down:':<20} {pos_by_rating.get('thumbs_down', 0):>5.1f}")
+
+    # File Analysis
+    files = stats.get("file_analysis", {})
+    if files.get("conversations_with_files", 0) > 0 or files.get("file_attachment_rate", 0) > 0:
+        print(f"\nFILE ATTACHMENTS")
+        print(f"  {'With files:':<20} {files.get('conversations_with_files', 0):>5}  ({files.get('file_attachment_rate', 0):>5.1%})")
+        if "thumbs_up_rate_with_files" in files:
+            print(f"  {'+ rate (with files):':<20} {files['thumbs_up_rate_with_files']:>5.1%}")
+        if "thumbs_up_rate_without_files" in files:
+            print(f"  {'+ rate (no files):':<20} {files['thumbs_up_rate_without_files']:>5.1%}")
+
+    # Comment Analysis
+    comments = stats.get("comment_analysis", {})
+    if comments.get("total_with_comments", 0) > 0:
+        print(f"\nCOMMENT ANALYSIS")
+        print(f"  {'With comments:':<20} {comments['total_with_comments']:>5}  ({comments.get('comment_rate', 0):>5.1%})")
+        neg_comments = comments.get("negative_feedback_comments", [])
+        if neg_comments:
+            print(f"  Negative feedback comments ({len(neg_comments)}):")
+            for c in neg_comments[:5]:  # Show up to 5
+                comment_preview = str(c)[:50] + "..." if len(str(c)) > 50 else str(c)
+                print(f"    - {comment_preview}")
+            if len(neg_comments) > 5:
+                print(f"    ... and {len(neg_comments) - 5} more")
+
+    # Tag Analysis
+    tags = stats.get("tag_analysis", {})
+    if tags.get("total_tags", 0) > 0:
+        print(f"\nTAG ANALYSIS")
+        print(f"  {'Total tags:':<20} {tags['total_tags']:>5}")
+        print(f"  {'Unique tags:':<20} {tags['unique_tags']:>5}")
+        if tags.get("distribution"):
+            dist = tags["distribution"]
+            max_count = max(dist.values(), default=1)
+            sorted_tags = sorted(dist.items(), key=lambda x: x[1], reverse=True)[:10]
+            for tag, count in sorted_tags:
+                label = str(tag)[:18]
+                print(f"  {label:<20} {count:>5}  {_format_bar(count, max_count)}")
 
     print("\n" + "=" * width)
 

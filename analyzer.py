@@ -351,51 +351,136 @@ def generate_statistics(df: pd.DataFrame) -> dict:
     }
 
 
+def _format_bar(value: float, max_value: float, width: int = 10) -> str:
+    """Create a visual bar representation."""
+    if max_value == 0:
+        return " " * width
+    filled = int((value / max_value) * width)
+    return "#" * filled + "-" * (width - filled)
+
+
+def _format_date_short(iso_date: str) -> str:
+    """Convert ISO date to short format (MM-DD)."""
+    try:
+        # Handle both ISO format and date strings
+        if "T" in iso_date:
+            date_part = iso_date.split("T")[0]
+        else:
+            date_part = iso_date
+        parts = date_part.split("-")
+        return f"{parts[1]}-{parts[2]}"
+    except (IndexError, AttributeError):
+        return str(iso_date)[:5]
+
+
 def print_statistics(stats: dict) -> None:
     """Print statistics in a readable format."""
-    print("\n" + "=" * 60)
-    print("FEEDBACK DATA STATISTICS")
-    print("=" * 60)
+    width = 60
 
+    print("\n" + "=" * width)
+    print("FEEDBACK DATA STATISTICS".center(width))
+    print("=" * width)
+
+    # Overview
     overview = stats["overview"]
+    start_date = _format_date_short(overview["date_range"]["earliest"])
+    end_date = _format_date_short(overview["date_range"]["latest"])
+
     print(f"\nOVERVIEW")
-    print(f"   Total records: {overview['total_records']}")
-    print(f"   Date range: {overview['date_range']['earliest']} to {overview['date_range']['latest']}")
+    print(f"  {'Total records:':<20} {overview['total_records']:>6}")
+    print(f"  {'Date range:':<20} {start_date} to {end_date}")
     if "archived_chats" in overview:
-        print(f"   Archived chats: {overview['archived_chats']}")
-        print(f"   Pinned chats: {overview['pinned_chats']}")
+        print(f"  {'Archived chats:':<20} {overview['archived_chats']:>6}")
+        print(f"  {'Pinned chats:':<20} {overview['pinned_chats']:>6}")
 
+    # Rating Analysis
     rating = stats["rating_analysis"]
+    dist = rating["distribution"]
+    total = sum(v for v in dist.values() if v is not None)
+    thumbs_up = dist.get(1, 0) or 0
+    thumbs_down = dist.get(-1, 0) or 0
+
     print(f"\nRATING ANALYSIS")
-    print(f"   Distribution: {rating['distribution']}")
-    print(f"   Thumbs up rate: {rating['thumbs_up_rate']:.1%}")
+    if total > 0:
+        up_pct = thumbs_up / total
+        down_pct = thumbs_down / total
+        print(f"  {'Thumbs Up:':<20} {thumbs_up:>6}  ({up_pct:>5.1%})  {_format_bar(thumbs_up, total)}")
+        print(f"  {'Thumbs Down:':<20} {thumbs_down:>6}  ({down_pct:>5.1%})  {_format_bar(thumbs_down, total)}")
     if "detailed_average" in rating:
-        print(f"   Detailed rating average: {rating['detailed_average']:.1f}/10")
+        avg = rating["detailed_average"]
+        print(f"  {'Detailed avg:':<20} {avg:>5.1f}/10  {_format_bar(avg, 10)}")
 
+    # Reason Analysis
     reason = stats["reason_analysis"]
-    print(f"\nREASON ANALYSIS")
-    for r, count in reason["distribution"].items():
-        rate = reason["thumbs_up_rate_by_reason"].get(r, 0)
-        print(f"   {r}: {count} ({rate:.1%} positive)")
+    reason_dist = reason["distribution"]
+    if reason_dist:
+        print(f"\nREASON ANALYSIS")
+        max_count = max((v for v in reason_dist.values() if v), default=1)
+        sorted_reasons = sorted(reason_dist.items(), key=lambda x: x[1] or 0, reverse=True)
+        for r, count in sorted_reasons:
+            if r is None:
+                r = "(no reason)"
+            count = count or 0
+            rate = reason["thumbs_up_rate_by_reason"].get(r, 0)
+            label = str(r)[:18]
+            print(f"  {label:<20} {count:>5}  ({rate:>5.1%} +)  {_format_bar(count, max_count)}")
 
+    # Model Analysis
     model = stats["model_analysis"]
-    print(f"\nMODEL ANALYSIS")
-    for m, count in model["distribution"].items():
-        rate = model["thumbs_up_rate_by_model"].get(m, 0)
-        print(f"   {m}: {count} ({rate:.1%} positive)")
+    model_dist = model["distribution"]
+    if model_dist:
+        print(f"\nMODEL ANALYSIS")
+        max_count = max((v for v in model_dist.values() if v), default=1)
+        sorted_models = sorted(model_dist.items(), key=lambda x: x[1] or 0, reverse=True)
+        for m, count in sorted_models:
+            if m is None:
+                m = "(unknown)"
+            count = count or 0
+            rate = model["thumbs_up_rate_by_model"].get(m, 0)
+            label = str(m)[:18]
+            print(f"  {label:<20} {count:>5}  ({rate:>5.1%} +)  {_format_bar(count, max_count)}")
 
+    # RAG Analysis
     rag = stats["rag_analysis"]
-    print(f"\nRAG ANALYSIS")
-    if rag.get("action_distribution"):
-        print(f"   Actions: {rag['action_distribution']}")
-    if rag.get("sources_retrieved"):
-        print(f"   Avg sources retrieved: {rag['sources_retrieved']['average']:.1f}")
-    if rag.get("queries_generated"):
-        print(f"   Avg queries generated: {rag['queries_generated']['average_per_response']:.1f}")
+    if rag.get("action_distribution") or rag.get("sources_retrieved") or rag.get("queries_generated"):
+        print(f"\nRAG ANALYSIS")
+        if rag.get("sources_retrieved"):
+            src = rag["sources_retrieved"]
+            print(f"  {'Sources retrieved:':<20} {src['total']:>6} total, {src['average']:.1f} avg")
+        if rag.get("queries_generated"):
+            qry = rag["queries_generated"]
+            print(f"  {'Queries generated:':<20} {qry['average_per_response']:.1f} avg per response")
+        if rag.get("action_distribution"):
+            print(f"  {'Actions:':<20}")
+            actions = rag["action_distribution"]
+            max_count = max(actions.values(), default=1)
+            sorted_actions = sorted(actions.items(), key=lambda x: x[1], reverse=True)
+            for action, count in sorted_actions:
+                label = str(action)[:18]
+                print(f"    {label:<18} {count:>5}  {_format_bar(count, max_count)}")
 
+    # Temporal Analysis
     temporal = stats["temporal_analysis"]
-    print(f"\nTEMPORAL ANALYSIS")
-    print(f"   By date: {temporal['by_date']}")
+    by_date = temporal.get("by_date", {})
+    if by_date:
+        print(f"\nDAILY ACTIVITY")
+        max_count = max(by_date.values(), default=1)
+        for date, count in sorted(by_date.items()):
+            short_date = _format_date_short(date)
+            print(f"  {short_date:<10} {count:>5}  {_format_bar(count, max_count)}")
+
+    # Day of week
+    by_dow = temporal.get("by_day_of_week", {})
+    if by_dow:
+        print(f"\nBY DAY OF WEEK")
+        max_count = max(by_dow.values(), default=1)
+        day_order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        for day in day_order:
+            if day in by_dow:
+                count = by_dow[day]
+                print(f"  {day:<12} {count:>5}  {_format_bar(count, max_count)}")
+
+    print("\n" + "=" * width)
 
 
 def make_serializable(obj: Any) -> Any:

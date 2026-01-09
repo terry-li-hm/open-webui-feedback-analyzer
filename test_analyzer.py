@@ -118,33 +118,66 @@ class TestFilterByDateRange:
     """Tests for filter_by_date_range function."""
 
     def test_filter_basic(self):
-        # Timestamps for 2025-12-05 and 2025-12-15 (UTC)
+        # Timestamps for 2024-12-05 and 2024-12-15 (UTC)
         data = [
-            {"id": 1, "created_at": 1733356800},  # 2025-12-05 00:00:00 UTC
-            {"id": 2, "created_at": 1734220800},  # 2025-12-15 00:00:00 UTC
+            {"id": 1, "created_at": 1733356800},  # 2024-12-05 00:00:00 UTC
+            {"id": 2, "created_at": 1734220800},  # 2024-12-15 00:00:00 UTC
         ]
-        result = filter_by_date_range(data, "2025-12-01", "2025-12-10", timezone="UTC")
+        result = filter_by_date_range(data, "2024-12-01", "2024-12-10", timezone="UTC")
         assert len(result) == 1
         assert result.iloc[0]["id"] == 1
 
     def test_empty_data(self):
         with pytest.raises(DataValidationError, match="No data to filter"):
-            filter_by_date_range([], "2025-01-01", "2025-01-31")
+            filter_by_date_range([], "2024-01-01", "2024-01-31")
 
     def test_missing_created_at(self):
         data = [{"id": 1}]
         with pytest.raises(DataValidationError, match="missing required 'created_at'"):
-            filter_by_date_range(data, "2025-01-01", "2025-01-31")
+            filter_by_date_range(data, "2024-01-01", "2024-01-31")
 
     def test_inclusive_date_range(self):
         # Test that both start and end dates are inclusive
         data = [
-            {"id": 1, "created_at": 1733011200},  # 2025-12-01 00:00:00 UTC
-            {"id": 2, "created_at": 1733097599},  # 2025-12-01 23:59:59 UTC
-            {"id": 3, "created_at": 1733097600},  # 2025-12-02 00:00:00 UTC
+            {"id": 1, "created_at": 1733011200},  # 2024-12-01 00:00:00 UTC
+            {"id": 2, "created_at": 1733097599},  # 2024-12-01 23:59:59 UTC
+            {"id": 3, "created_at": 1733097600},  # 2024-12-02 00:00:00 UTC
         ]
-        result = filter_by_date_range(data, "2025-12-01", "2025-12-01", timezone="UTC")
+        result = filter_by_date_range(data, "2024-12-01", "2024-12-01", timezone="UTC")
         assert len(result) == 2
+
+    def test_no_date_range_returns_all(self):
+        # When start_date and end_date are None, return all data
+        data = [
+            {"id": 1, "created_at": 1733011200},  # 2024-12-01
+            {"id": 2, "created_at": 1734220800},  # 2024-12-15
+            {"id": 3, "created_at": 1735689600},  # 2025-01-01
+        ]
+        result = filter_by_date_range(data, None, None, timezone="UTC")
+        assert len(result) == 3
+
+    def test_only_start_date(self):
+        # When only start_date is provided, filter from start to latest
+        data = [
+            {"id": 1, "created_at": 1733011200},  # 2024-12-01
+            {"id": 2, "created_at": 1734220800},  # 2024-12-15
+            {"id": 3, "created_at": 1735689600},  # 2025-01-01
+        ]
+        result = filter_by_date_range(data, "2024-12-10", None, timezone="UTC")
+        assert len(result) == 2
+        assert result.iloc[0]["id"] == 2
+        assert result.iloc[1]["id"] == 3
+
+    def test_only_end_date(self):
+        # When only end_date is provided, filter from earliest to end
+        data = [
+            {"id": 1, "created_at": 1733011200},  # 2024-12-01
+            {"id": 2, "created_at": 1734220800},  # 2024-12-15
+            {"id": 3, "created_at": 1735689600},  # 2025-01-01
+        ]
+        result = filter_by_date_range(data, None, "2024-12-10", timezone="UTC")
+        assert len(result) == 1
+        assert result.iloc[0]["id"] == 1
 
 
 class TestMakeSerializable:
@@ -176,14 +209,17 @@ class TestMakeSerializable:
 class TestParseArgs:
     """Tests for parse_args function."""
 
-    def test_required_args(self):
+    def test_with_dates(self):
         args = parse_args(["input.json", "-s", "2025-01-01", "-e", "2025-01-31"])
         assert args.input == Path("input.json")
         assert args.start == "2025-01-01"
         assert args.end == "2025-01-31"
 
     def test_default_values(self):
-        args = parse_args(["input.json", "-s", "2025-01-01", "-e", "2025-01-31"])
+        args = parse_args(["input.json"])
+        assert args.input == Path("input.json")
+        assert args.start is None
+        assert args.end is None
         assert args.output_dir == Path(".")
         assert args.timezone == "Asia/Hong_Kong"
         assert args.no_export is False
@@ -205,9 +241,9 @@ class TestParseArgs:
         assert args.no_export is True
         assert args.quiet is True
 
-    def test_missing_required_args(self):
+    def test_missing_input_file(self):
         with pytest.raises(SystemExit):
-            parse_args(["input.json"])  # Missing -s and -e
+            parse_args([])  # Missing input file
 
 
 class TestExportFunctions:

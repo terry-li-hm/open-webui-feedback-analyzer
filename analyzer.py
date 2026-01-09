@@ -548,11 +548,13 @@ def print_statistics(stats: dict) -> None:
         max_count = max((v for v in reason_dist.values() if v), default=1)
         sorted_reasons = sorted(reason_dist.items(), key=lambda x: x[1] or 0, reverse=True)
         for r, count in sorted_reasons:
-            if r is None:
-                r = "(no reason)"
+            if r is None or r == "":
+                display_r = "(no reason)"
+            else:
+                display_r = r
             count = count or 0
             rate = reason["thumbs_up_rate_by_reason"].get(r, 0)
-            label = str(r)[:18]
+            label = str(display_r)[:18]
             print(f"  {label:<20} {count:>5}  ({rate:>5.1%} +)  {_format_bar(count, max_count)}")
 
     # Model Analysis
@@ -563,11 +565,13 @@ def print_statistics(stats: dict) -> None:
         max_count = max((v for v in model_dist.values() if v), default=1)
         sorted_models = sorted(model_dist.items(), key=lambda x: x[1] or 0, reverse=True)
         for m, count in sorted_models:
-            if m is None:
-                m = "(unknown)"
+            if m is None or m == "":
+                display_m = "(unknown)"
+            else:
+                display_m = m
             count = count or 0
             rate = model["thumbs_up_rate_by_model"].get(m, 0)
-            label = str(m)[:18]
+            label = str(display_m)[:18]
             print(f"  {label:<20} {count:>5}  ({rate:>5.1%} +)  {_format_bar(count, max_count)}")
 
     # RAG Analysis

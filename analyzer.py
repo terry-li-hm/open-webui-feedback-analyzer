@@ -1372,83 +1372,126 @@ def generate_chart_image(stats: dict, filepath: Path) -> None:
     # Prepare data
     months = sorted(by_month.keys())
     volumes = [by_month[m] for m in months]
-    accuracies = [by_month_acc.get(m, 0) * 100 for m in months]  # Convert to percentage
+    accuracies = [by_month_acc.get(m, 0) * 100 for m in months]
 
-    # Create figure with dual y-axes
-    fig, ax1 = plt.subplots(figsize=(12, 6))
+    # Month name mapping
+    month_names = {
+        '01': 'Jan', '02': 'Feb', '03': 'Mar', '04': 'Apr',
+        '05': 'May', '06': 'Jun', '07': 'Jul', '08': 'Aug',
+        '09': 'Sep', '10': 'Oct', '11': 'Nov', '12': 'Dec'
+    }
 
-    # Style - use a compatible style
-    try:
-        plt.style.use('seaborn-v0_8-whitegrid')
-    except OSError:
-        try:
-            plt.style.use('seaborn-whitegrid')
-        except OSError:
-            plt.style.use('ggplot')  # Fallback to always-available style
+    # Colors
+    vol_color = '#4A90D9'  # Professional blue
+    acc_color = '#2ECC71'  # Clean green
+    bg_color = '#FAFBFC'
+    grid_color = '#E8ECF0'
+    text_color = '#2C3E50'
+
+    # Create figure
+    plt.rcParams['font.family'] = 'sans-serif'
+    plt.rcParams['font.size'] = 11
+    fig, ax1 = plt.subplots(figsize=(14, 7))
     fig.patch.set_facecolor('white')
-    ax1.set_facecolor('white')
+    ax1.set_facecolor(bg_color)
 
     # X-axis positions
-    x = range(len(months))
+    x = list(range(len(months)))
 
-    # Volume bars (left y-axis)
-    bars = ax1.bar(x, volumes, color='#3498db', alpha=0.7, label='Feedback Volume', width=0.6)
-    ax1.set_xlabel('Month', fontsize=12, fontweight='bold')
-    ax1.set_ylabel('Feedback Volume', color='#3498db', fontsize=12, fontweight='bold')
-    ax1.tick_params(axis='y', labelcolor='#3498db')
+    # Volume bars
+    bar_width = 0.65
+    bars = ax1.bar(x, volumes, color=vol_color, alpha=0.85, width=bar_width,
+                   edgecolor='white', linewidth=1.5, label='Feedback Volume', zorder=3)
+
+    # Style left y-axis
+    ax1.set_ylabel('Feedback Volume', fontsize=13, fontweight='600', color=text_color, labelpad=15)
+    ax1.tick_params(axis='y', colors=text_color, labelsize=11)
+    ax1.set_ylim(0, max(volumes) * 1.25)
+
+    # X-axis labels (Month Year format)
+    x_labels = [f"{month_names.get(m[-2:], m[-2:])}\n{m[:4]}" for m in months]
     ax1.set_xticks(x)
-    ax1.set_xticklabels([m[-2:] + '/' + m[2:4] for m in months], fontsize=10)  # MM/YY format
+    ax1.set_xticklabels(x_labels, fontsize=10, color=text_color)
+    ax1.tick_params(axis='x', length=0, pad=8)
 
-    # Add volume labels on bars
+    # Volume labels on bars
     for bar, vol in zip(bars, volumes):
         ax1.text(bar.get_x() + bar.get_width()/2, bar.get_height() + max(volumes)*0.02,
-                 str(vol), ha='center', va='bottom', fontsize=9, color='#3498db')
+                 f'{vol:,}', ha='center', va='bottom', fontsize=11, fontweight='600',
+                 color=vol_color)
 
     # Accuracy line (right y-axis)
     ax2 = ax1.twinx()
-    line = ax2.plot(x, accuracies, color='#27ae60', marker='o', linewidth=3,
-                    markersize=10, label='Accuracy Rate', markerfacecolor='white',
-                    markeredgewidth=2)
-    ax2.set_ylabel('Accuracy Rate (%)', color='#27ae60', fontsize=12, fontweight='bold')
-    ax2.tick_params(axis='y', labelcolor='#27ae60')
-    ax2.set_ylim(0, 100)
+    line = ax2.plot(x, accuracies, color=acc_color, marker='o', linewidth=3.5,
+                    markersize=12, label='Accuracy Rate', markerfacecolor='white',
+                    markeredgewidth=3, markeredgecolor=acc_color, zorder=5)
 
-    # Add accuracy labels on points
+    # Style right y-axis
+    ax2.set_ylabel('Accuracy Rate (%)', fontsize=13, fontweight='600', color=text_color, labelpad=15)
+    ax2.tick_params(axis='y', colors=text_color, labelsize=11)
+    ax2.set_ylim(0, 105)
+    ax2.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f'{y:.0f}%'))
+
+    # Accuracy labels
     for i, acc in enumerate(accuracies):
-        ax2.text(i, acc + 3, f'{acc:.1f}%', ha='center', va='bottom',
-                 fontsize=9, color='#27ae60', fontweight='bold')
+        y_offset = 4 if i == 0 or accuracies[i] >= accuracies[i-1] else -8
+        va = 'bottom' if y_offset > 0 else 'top'
+        ax2.text(i, acc + y_offset, f'{acc:.1f}%', ha='center', va=va,
+                 fontsize=11, fontweight='bold', color=acc_color,
+                 bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor='none', alpha=0.8))
+
+    # Grid
+    ax1.set_axisbelow(True)
+    ax1.yaxis.grid(True, color=grid_color, linestyle='-', linewidth=1, alpha=0.7)
+    ax1.xaxis.grid(False)
+
+    # Remove spines
+    for spine in ['top', 'right', 'left', 'bottom']:
+        ax1.spines[spine].set_visible(False)
+        ax2.spines[spine].set_visible(False)
 
     # Title
     date_range = stats.get("overview", {}).get("date_range", {})
-    start = date_range.get("earliest", "")[:7]  # YYYY-MM
-    end = date_range.get("latest", "")[:7]
-    plt.title(f'Chatbot Performance: Monthly Volume & Accuracy\n{start} to {end}',
-              fontsize=14, fontweight='bold', pad=20)
+    start_date = date_range.get("earliest", "")[:10]
+    end_date = date_range.get("latest", "")[:10]
+    fig.suptitle('Chatbot Performance Report', fontsize=18, fontweight='bold',
+                 color=text_color, y=0.98)
+    ax1.set_title(f'Monthly Volume & Accuracy  |  {start_date} to {end_date}',
+                  fontsize=12, color='#666', pad=20, style='italic')
 
-    # Legend
+    # Legend at bottom
     lines1, labels1 = ax1.get_legend_handles_labels()
     lines2, labels2 = ax2.get_legend_handles_labels()
-    ax1.legend(lines1 + lines2, labels1 + labels2, loc='upper left', fontsize=10)
+    legend = ax1.legend(lines1 + lines2, labels1 + labels2, loc='upper center',
+                        bbox_to_anchor=(0.5, -0.12), ncol=2, fontsize=11,
+                        frameon=True, fancybox=True, shadow=False,
+                        edgecolor=grid_color)
 
-    # Summary stats box
+    # Summary box
     total_vol = sum(volumes)
     avg_acc = sum(accuracies) / len(accuracies)
     latest_acc = accuracies[-1]
     first_acc = accuracies[0]
     acc_change = latest_acc - first_acc
+    change_symbol = "+" if acc_change >= 0 else ""
+    change_color = acc_color if acc_change >= 0 else '#E74C3C'
 
-    summary_text = (f'Total Feedback: {total_vol:,}\n'
-                   f'Avg Accuracy: {avg_acc:.1f}%\n'
-                   f'Accuracy Change: {"+" if acc_change >= 0 else ""}{acc_change:.1f}pp')
+    summary_text = (f'Total: {total_vol:,}  |  '
+                   f'Avg: {avg_acc:.1f}%  |  '
+                   f'Change: {change_symbol}{acc_change:.1f}pp')
 
-    props = dict(boxstyle='round', facecolor='#f8f9fa', alpha=0.9, edgecolor='#dee2e6')
-    ax1.text(0.98, 0.98, summary_text, transform=ax1.transAxes, fontsize=10,
-             verticalalignment='top', horizontalalignment='right', bbox=props)
+    props = dict(boxstyle='round,pad=0.5', facecolor='white', edgecolor=grid_color,
+                 linewidth=1.5, alpha=0.95)
+    ax1.text(0.5, 1.08, summary_text, transform=ax1.transAxes, fontsize=12,
+             verticalalignment='center', horizontalalignment='center', bbox=props,
+             color=text_color, fontweight='500')
 
     plt.tight_layout()
+    plt.subplots_adjust(bottom=0.15, top=0.85)
 
     try:
-        plt.savefig(filepath, dpi=150, bbox_inches='tight', facecolor='white', edgecolor='none')
+        plt.savefig(filepath, dpi=150, bbox_inches='tight', facecolor='white',
+                    edgecolor='none', pad_inches=0.3)
         plt.close()
         logger.info(f"Chart image generated: {filepath}")
     except (OSError, PermissionError) as e:

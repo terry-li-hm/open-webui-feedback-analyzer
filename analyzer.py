@@ -16,6 +16,8 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 # Constants
 DEFAULT_TIMEZONE = "Asia/Hong_Kong"
@@ -907,6 +909,370 @@ def export_statistics(stats: dict, filepath: Path) -> None:
         raise FeedbackAnalyzerError(f"Failed to export statistics: {e}")
 
 
+def generate_html_report(stats: dict, df: pd.DataFrame, filepath: Path) -> None:
+    """Generate interactive HTML report with charts for stakeholders.
+
+    Args:
+        stats: Statistics dictionary from generate_statistics
+        df: DataFrame with the filtered feedback data
+        filepath: Output HTML file path
+    """
+    # Color scheme
+    colors = {
+        "primary": "#3498db",
+        "success": "#27ae60",
+        "danger": "#e74c3c",
+        "warning": "#f39c12",
+        "info": "#17a2b8",
+        "light": "#f8f9fa",
+        "dark": "#343a40",
+    }
+
+    # Extract data
+    overview = stats.get("overview", {})
+    rating = stats.get("rating_analysis", {})
+    trends = stats.get("trend_analysis", {})
+    temporal = stats.get("temporal_analysis", {})
+    reason = stats.get("reason_analysis", {})
+    model = stats.get("model_analysis", {})
+
+    # Calculate KPIs
+    total_records = overview.get("total_records", 0)
+    dist = rating.get("distribution", {})
+    thumbs_up = dist.get(1, 0) or 0
+    thumbs_down = dist.get(-1, 0) or 0
+    accuracy = thumbs_up / (thumbs_up + thumbs_down) if (thumbs_up + thumbs_down) > 0 else 0
+
+    # WoW/MoM changes
+    wow = trends.get("week_on_week", {})
+    mom = trends.get("month_on_month", {})
+
+    # Create figures list
+    figures_html = []
+
+    # --- Figure 1: Volume and Accuracy Over Time (Daily) ---
+    by_date = temporal.get("by_date", {})
+    if by_date:
+        dates = list(by_date.keys())[-30:]  # Last 30 days
+        volumes = [by_date[d] for d in dates]
+
+        # Calculate daily accuracy
+        df_copy = df.copy()
+        df_copy["date_str"] = df_copy["created_at"].dt.date.astype(str)
+        daily_acc = df_copy.groupby("date_str").apply(
+            lambda x: (x["data"].apply(lambda d: safe_get(d, "rating")) == RATING_THUMBS_UP).sum() / len(x) if len(x) > 0 else 0
+        ).to_dict()
+        accuracies = [daily_acc.get(d, 0) * 100 for d in dates]
+
+        fig1 = make_subplots(specs=[[{"secondary_y": True}]])
+        fig1.add_trace(
+            go.Bar(name="Volume", x=dates, y=volumes, marker_color=colors["primary"], opacity=0.7),
+            secondary_y=False,
+        )
+        fig1.add_trace(
+            go.Scatter(name="Accuracy %", x=dates, y=accuracies, mode="lines+markers",
+                      line=dict(color=colors["success"], width=3), marker=dict(size=6)),
+            secondary_y=True,
+        )
+        fig1.update_layout(
+            title="Daily Volume & Accuracy Trend (Last 30 Days)",
+            xaxis_title="Date",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            hovermode="x unified",
+            template="plotly_white",
+        )
+        fig1.update_yaxes(title_text="Feedback Volume", secondary_y=False)
+        fig1.update_yaxes(title_text="Accuracy (%)", secondary_y=True, range=[0, 100])
+        figures_html.append(fig1.to_html(full_html=False, include_plotlyjs=False))
+
+    # --- Figure 2: Weekly Trend ---
+    by_week = temporal.get("by_week", {})
+    if by_week and len(by_week) > 1:
+        weeks = list(by_week.keys())[-12:]  # Last 12 weeks
+        week_volumes = [by_week[w] for w in weeks]
+
+        # Calculate weekly accuracy
+        df_copy = df.copy()
+        df_copy["week_str"] = df_copy["created_at"].dt.to_period("W").astype(str)
+        weekly_acc = df_copy.groupby("week_str").apply(
+            lambda x: (x["data"].apply(lambda d: safe_get(d, "rating")) == RATING_THUMBS_UP).sum() / len(x) if len(x) > 0 else 0
+        ).to_dict()
+        week_accuracies = [weekly_acc.get(w, 0) * 100 for w in weeks]
+
+        fig2 = make_subplots(specs=[[{"secondary_y": True}]])
+        fig2.add_trace(
+            go.Bar(name="Volume", x=weeks, y=week_volumes, marker_color=colors["info"], opacity=0.7),
+            secondary_y=False,
+        )
+        fig2.add_trace(
+            go.Scatter(name="Accuracy %", x=weeks, y=week_accuracies, mode="lines+markers",
+                      line=dict(color=colors["success"], width=3), marker=dict(size=8)),
+            secondary_y=True,
+        )
+        fig2.update_layout(
+            title="Weekly Volume & Accuracy Trend",
+            xaxis_title="Week",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            hovermode="x unified",
+            template="plotly_white",
+        )
+        fig2.update_yaxes(title_text="Feedback Volume", secondary_y=False)
+        fig2.update_yaxes(title_text="Accuracy (%)", secondary_y=True, range=[0, 100])
+        figures_html.append(fig2.to_html(full_html=False, include_plotlyjs=False))
+
+    # --- Figure 3: Rating Distribution (Pie) ---
+    fig3 = go.Figure(data=[go.Pie(
+        labels=["Thumbs Up (Accurate)", "Thumbs Down (Inaccurate)"],
+        values=[thumbs_up, thumbs_down],
+        marker_colors=[colors["success"], colors["danger"]],
+        hole=0.4,
+        textinfo="label+percent+value",
+        textposition="outside",
+    )])
+    fig3.update_layout(
+        title="Overall Rating Distribution",
+        template="plotly_white",
+        showlegend=True,
+        legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5),
+    )
+    figures_html.append(fig3.to_html(full_html=False, include_plotlyjs=False))
+
+    # --- Figure 4: Reason Analysis ---
+    reason_dist = reason.get("distribution", {})
+    if reason_dist:
+        reasons = list(reason_dist.keys())
+        reason_counts = list(reason_dist.values())
+        reason_labels = [r if r else "(no reason)" for r in reasons]
+
+        # Get positive rate by reason
+        pos_by_reason = reason.get("positive_rate_by_reason", {})
+
+        fig4 = go.Figure()
+        fig4.add_trace(go.Bar(
+            x=reason_counts,
+            y=reason_labels,
+            orientation="h",
+            marker_color=colors["primary"],
+            text=[f"{c} ({pos_by_reason.get(r, 0):.0%} positive)" for r, c in zip(reasons, reason_counts)],
+            textposition="auto",
+        ))
+        fig4.update_layout(
+            title="Feedback by Reason",
+            xaxis_title="Count",
+            yaxis_title="Reason",
+            template="plotly_white",
+            height=max(300, len(reasons) * 40),
+        )
+        figures_html.append(fig4.to_html(full_html=False, include_plotlyjs=False))
+
+    # --- Figure 5: Day of Week Distribution ---
+    by_dow = temporal.get("by_day_of_week", {})
+    if by_dow:
+        day_order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        dow_counts = [by_dow.get(day, 0) for day in day_order]
+
+        fig5 = go.Figure(data=[go.Bar(
+            x=day_order,
+            y=dow_counts,
+            marker_color=[colors["primary"]] * 5 + [colors["warning"]] * 2,  # Weekdays vs weekend
+            text=dow_counts,
+            textposition="auto",
+        )])
+        fig5.update_layout(
+            title="Feedback by Day of Week",
+            xaxis_title="Day",
+            yaxis_title="Count",
+            template="plotly_white",
+        )
+        figures_html.append(fig5.to_html(full_html=False, include_plotlyjs=False))
+
+    # --- Figure 6: Hourly Distribution ---
+    by_hour = temporal.get("by_hour", {})
+    if by_hour:
+        hours = list(range(24))
+        hour_counts = [by_hour.get(h, 0) for h in hours]
+        hour_labels = [f"{h:02d}:00" for h in hours]
+
+        fig6 = go.Figure(data=[go.Bar(
+            x=hour_labels,
+            y=hour_counts,
+            marker_color=colors["info"],
+        )])
+        fig6.update_layout(
+            title="Feedback by Hour of Day",
+            xaxis_title="Hour",
+            yaxis_title="Count",
+            template="plotly_white",
+        )
+        figures_html.append(fig6.to_html(full_html=False, include_plotlyjs=False))
+
+    # --- Figure 7: Model Analysis (if multiple models) ---
+    model_dist = model.get("distribution", {})
+    if model_dist and len(model_dist) > 1:
+        models = list(model_dist.keys())
+        model_counts = list(model_dist.values())
+        pos_by_model = model.get("thumbs_up_rate_by_model", {})
+
+        fig7 = go.Figure()
+        fig7.add_trace(go.Bar(
+            x=model_counts,
+            y=models,
+            orientation="h",
+            marker_color=colors["primary"],
+            text=[f"{c} ({pos_by_model.get(m, 0):.0%} accurate)" for m, c in zip(models, model_counts)],
+            textposition="auto",
+        ))
+        fig7.update_layout(
+            title="Feedback by Model",
+            xaxis_title="Count",
+            yaxis_title="Model",
+            template="plotly_white",
+            height=max(300, len(models) * 50),
+        )
+        figures_html.append(fig7.to_html(full_html=False, include_plotlyjs=False))
+
+    # Build KPI cards HTML
+    def format_change(value: float, is_pct_points: bool = False) -> str:
+        if value > 0:
+            arrow = "↑"
+            color = colors["success"]
+        elif value < 0:
+            arrow = "↓"
+            color = colors["danger"]
+        else:
+            arrow = "→"
+            color = colors["dark"]
+        if is_pct_points:
+            return f'<span style="color: {color}">{arrow} {abs(value)*100:.1f}pp</span>'
+        return f'<span style="color: {color}">{arrow} {abs(value):.1%}</span>'
+
+    # KPI HTML
+    wow_vol_html = format_change(wow.get("volume_change", 0)) if wow else "N/A"
+    wow_acc_html = format_change(wow.get("accuracy_change", 0), is_pct_points=True) if wow else "N/A"
+    mom_vol_html = format_change(mom.get("volume_change", 0)) if mom else "N/A"
+    mom_acc_html = format_change(mom.get("accuracy_change", 0), is_pct_points=True) if mom else "N/A"
+
+    date_range = overview.get("date_range", {})
+    start_date = date_range.get("earliest", "")[:10]
+    end_date = date_range.get("latest", "")[:10]
+
+    # Build complete HTML
+    html_content = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feedback Analysis Report</title>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background-color: #f5f7fa;
+            color: #333;
+            line-height: 1.6;
+        }}
+        .container {{ max-width: 1400px; margin: 0 auto; padding: 20px; }}
+        .header {{
+            background: linear-gradient(135deg, {colors["primary"]}, {colors["info"]});
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }}
+        .header h1 {{ font-size: 2em; margin-bottom: 10px; }}
+        .header p {{ opacity: 0.9; }}
+        .kpi-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }}
+        .kpi-card {{
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            text-align: center;
+        }}
+        .kpi-card .value {{
+            font-size: 2.5em;
+            font-weight: bold;
+            color: {colors["primary"]};
+        }}
+        .kpi-card .label {{ color: #666; font-size: 0.9em; margin-top: 5px; }}
+        .kpi-card .change {{ font-size: 0.85em; margin-top: 8px; }}
+        .chart-container {{
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }}
+        .chart-row {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }}
+        .footer {{
+            text-align: center;
+            padding: 20px;
+            color: #666;
+            font-size: 0.85em;
+        }}
+        @media (max-width: 768px) {{
+            .kpi-grid {{ grid-template-columns: repeat(2, 1fr); }}
+            .chart-row {{ grid-template-columns: 1fr; }}
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 Feedback Analysis Report</h1>
+            <p>Period: {start_date} to {end_date}</p>
+        </div>
+
+        <div class="kpi-grid">
+            <div class="kpi-card">
+                <div class="value">{total_records:,}</div>
+                <div class="label">Total Feedback</div>
+                <div class="change">WoW: {wow_vol_html} | MoM: {mom_vol_html}</div>
+            </div>
+            <div class="kpi-card">
+                <div class="value" style="color: {colors["success"]}">{accuracy:.1%}</div>
+                <div class="label">Accuracy Rate</div>
+                <div class="change">WoW: {wow_acc_html} | MoM: {mom_acc_html}</div>
+            </div>
+            <div class="kpi-card">
+                <div class="value" style="color: {colors["success"]}">{thumbs_up:,}</div>
+                <div class="label">Thumbs Up (Accurate)</div>
+            </div>
+            <div class="kpi-card">
+                <div class="value" style="color: {colors["danger"]}">{thumbs_down:,}</div>
+                <div class="label">Thumbs Down (Inaccurate)</div>
+            </div>
+        </div>
+
+        {"".join(f'<div class="chart-container">{fig}</div>' for fig in figures_html)}
+
+        <div class="footer">
+            Generated by Open WebUI Feedback Analyzer<br>
+            Report generated on {pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")}
+        </div>
+    </div>
+</body>
+</html>"""
+
+    try:
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write(html_content)
+        logger.info(f"HTML report generated: {filepath}")
+    except (OSError, PermissionError) as e:
+        raise FeedbackAnalyzerError(f"Failed to generate HTML report: {e}")
+
+
 def parse_args(args: list[str] | None = None) -> argparse.Namespace:
     """Parse command line arguments.
 
@@ -968,6 +1334,11 @@ Examples:
         "-v", "--verbose",
         action="store_true",
         help="Enable verbose logging",
+    )
+    parser.add_argument(
+        "--html",
+        action="store_true",
+        help="Generate interactive HTML report for stakeholders",
     )
 
     return parser.parse_args(args)
@@ -1040,6 +1411,12 @@ def main(args: list[str] | None = None) -> int:
             stats_file = parsed.output_dir / f"{actual_start}-{actual_end}-statistics.json"
             logger.info(f"Exporting statistics to {stats_file}...")
             export_statistics(stats, stats_file)
+
+            # Generate HTML report if requested
+            if parsed.html:
+                html_file = parsed.output_dir / f"{actual_start}-{actual_end}-report.html"
+                logger.info(f"Generating HTML report to {html_file}...")
+                generate_html_report(stats, df, html_file)
 
         logger.info("Done!")
         return 0

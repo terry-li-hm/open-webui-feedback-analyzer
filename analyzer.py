@@ -486,6 +486,89 @@ def _analyze_files(df: pd.DataFrame) -> dict:
     return stats
 
 
+def _analyze_trends(df: pd.DataFrame) -> dict:
+    """Analyze week-on-week and month-on-month trends for volume and accuracy."""
+    if len(df) == 0:
+        return {}
+
+    # Add period columns
+    df = df.copy()
+    df["week"] = df["created_at"].dt.to_period("W")
+    df["month"] = df["created_at"].dt.to_period("M")
+
+    ratings = df["data"].apply(lambda x: safe_get(x, "rating"))
+
+    stats = {}
+
+    # Week-on-Week analysis
+    weeks = sorted(df["week"].unique())
+    if len(weeks) >= 2:
+        current_week = weeks[-1]
+        prev_week = weeks[-2]
+
+        current_week_df = df[df["week"] == current_week]
+        prev_week_df = df[df["week"] == prev_week]
+
+        current_week_ratings = current_week_df["data"].apply(lambda x: safe_get(x, "rating"))
+        prev_week_ratings = prev_week_df["data"].apply(lambda x: safe_get(x, "rating"))
+
+        # Volume
+        current_week_vol = len(current_week_df)
+        prev_week_vol = len(prev_week_df)
+        wow_vol_change = (current_week_vol - prev_week_vol) / prev_week_vol if prev_week_vol > 0 else 0
+
+        # Accuracy (thumbs up rate)
+        current_week_acc = (current_week_ratings == RATING_THUMBS_UP).sum() / len(current_week_ratings) if len(current_week_ratings) > 0 else 0
+        prev_week_acc = (prev_week_ratings == RATING_THUMBS_UP).sum() / len(prev_week_ratings) if len(prev_week_ratings) > 0 else 0
+        wow_acc_change = current_week_acc - prev_week_acc  # Percentage point change
+
+        stats["week_on_week"] = {
+            "current_week": str(current_week),
+            "previous_week": str(prev_week),
+            "current_volume": current_week_vol,
+            "previous_volume": prev_week_vol,
+            "volume_change": wow_vol_change,
+            "current_accuracy": current_week_acc,
+            "previous_accuracy": prev_week_acc,
+            "accuracy_change": wow_acc_change,
+        }
+
+    # Month-on-Month analysis
+    months = sorted(df["month"].unique())
+    if len(months) >= 2:
+        current_month = months[-1]
+        prev_month = months[-2]
+
+        current_month_df = df[df["month"] == current_month]
+        prev_month_df = df[df["month"] == prev_month]
+
+        current_month_ratings = current_month_df["data"].apply(lambda x: safe_get(x, "rating"))
+        prev_month_ratings = prev_month_df["data"].apply(lambda x: safe_get(x, "rating"))
+
+        # Volume
+        current_month_vol = len(current_month_df)
+        prev_month_vol = len(prev_month_df)
+        mom_vol_change = (current_month_vol - prev_month_vol) / prev_month_vol if prev_month_vol > 0 else 0
+
+        # Accuracy (thumbs up rate)
+        current_month_acc = (current_month_ratings == RATING_THUMBS_UP).sum() / len(current_month_ratings) if len(current_month_ratings) > 0 else 0
+        prev_month_acc = (prev_month_ratings == RATING_THUMBS_UP).sum() / len(prev_month_ratings) if len(prev_month_ratings) > 0 else 0
+        mom_acc_change = current_month_acc - prev_month_acc  # Percentage point change
+
+        stats["month_on_month"] = {
+            "current_month": str(current_month),
+            "previous_month": str(prev_month),
+            "current_volume": current_month_vol,
+            "previous_volume": prev_month_vol,
+            "volume_change": mom_vol_change,
+            "current_accuracy": current_month_acc,
+            "previous_accuracy": prev_month_acc,
+            "accuracy_change": mom_acc_change,
+        }
+
+    return stats
+
+
 def generate_statistics(df: pd.DataFrame) -> dict:
     """Generate comprehensive statistics from feedback data.
 
@@ -504,6 +587,7 @@ def generate_statistics(df: pd.DataFrame) -> dict:
         "reason_analysis": _analyze_reasons(df),
         "model_analysis": _analyze_models(df),
         "temporal_analysis": _analyze_temporal(df),
+        "trend_analysis": _analyze_trends(df),
         "rag_analysis": _analyze_rag(df),
         "comment_analysis": _analyze_comments(df),
         "feedback_position": _analyze_feedback_position(df),
@@ -556,6 +640,33 @@ def print_statistics(stats: dict) -> None:
         print(f"  {'Archived chats:':<20} {overview['archived_chats']:>6}")
     if overview.get("pinned_chats", 0) > 0:
         print(f"  {'Pinned chats:':<20} {overview['pinned_chats']:>6}")
+
+    # Trend Analysis (WoW/MoM)
+    trends = stats.get("trend_analysis", {})
+    if trends:
+        print(f"\nTREND ANALYSIS")
+
+        # Week-on-Week
+        wow = trends.get("week_on_week", {})
+        if wow:
+            vol_change = wow["volume_change"]
+            acc_change = wow["accuracy_change"]
+            vol_arrow = "↑" if vol_change > 0 else "↓" if vol_change < 0 else "→"
+            acc_arrow = "↑" if acc_change > 0 else "↓" if acc_change < 0 else "→"
+            print(f"  Week-on-Week ({wow['previous_week']} → {wow['current_week']})")
+            print(f"    {'Volume:':<14} {wow['current_volume']:>5} ({vol_arrow}{abs(vol_change):>5.1%} vs {wow['previous_volume']})")
+            print(f"    {'Accuracy:':<14} {wow['current_accuracy']:>5.1%} ({acc_arrow}{abs(acc_change)*100:>4.1f}pp vs {wow['previous_accuracy']:.1%})")
+
+        # Month-on-Month
+        mom = trends.get("month_on_month", {})
+        if mom:
+            vol_change = mom["volume_change"]
+            acc_change = mom["accuracy_change"]
+            vol_arrow = "↑" if vol_change > 0 else "↓" if vol_change < 0 else "→"
+            acc_arrow = "↑" if acc_change > 0 else "↓" if acc_change < 0 else "→"
+            print(f"  Month-on-Month ({mom['previous_month']} → {mom['current_month']})")
+            print(f"    {'Volume:':<14} {mom['current_volume']:>5} ({vol_arrow}{abs(vol_change):>5.1%} vs {mom['previous_volume']})")
+            print(f"    {'Accuracy:':<14} {mom['current_accuracy']:>5.1%} ({acc_arrow}{abs(acc_change)*100:>4.1f}pp vs {mom['previous_accuracy']:.1%})")
 
     # Rating Analysis
     rating = stats["rating_analysis"]

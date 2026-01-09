@@ -33,7 +33,6 @@ python analyzer.py <input_file> -s <start_date> -e <end_date> [options]
 |----------|---------|-------------|
 | `-o, --output-dir` | `.` | Output directory for exported files |
 | `--timezone` | `Asia/Hong_Kong` | Timezone for date interpretation |
-| `--encoding` | `utf-8` | Input file encoding (try `gbk` for Chinese, `utf-8-sig` for BOM) |
 | `--no-export` | - | Skip exporting filtered data and statistics |
 | `-q, --quiet` | - | Suppress output (only show errors) |
 | `-v, --verbose` | - | Enable verbose logging |
@@ -46,12 +45,6 @@ python analyzer.py feedback.json -s 2025-12-01 -e 2025-12-09
 
 # With custom timezone and output directory
 python analyzer.py feedback.json -s 2025-12-01 -e 2025-12-09 --timezone UTC -o ./output
-
-# For files with Chinese characters (GBK encoding)
-python analyzer.py feedback.json -s 2025-12-01 -e 2025-12-09 --encoding gbk
-
-# For UTF-8 with BOM (common in Windows)
-python analyzer.py feedback.json -s 2025-12-01 -e 2025-12-09 --encoding utf-8-sig
 ```
 
 ## Output

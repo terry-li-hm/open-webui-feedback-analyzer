@@ -90,12 +90,11 @@ def delete_keys_from_nested_json(data: Any, key_to_delete: str) -> Any:
     return data
 
 
-def load_feedback_data(filepath: Path, encoding: str = "utf-8") -> list[dict]:
+def load_feedback_data(filepath: Path) -> list[dict]:
     """Load and parse feedback JSON file.
 
     Args:
         filepath: Path to the JSON file
-        encoding: File encoding (default: utf-8)
 
     Returns:
         List of feedback records
@@ -104,7 +103,7 @@ def load_feedback_data(filepath: Path, encoding: str = "utf-8") -> list[dict]:
         DataLoadError: If file cannot be read or parsed
     """
     try:
-        with open(filepath, "r", encoding=encoding) as f:
+        with open(filepath, "r", encoding="utf-8") as f:
             data = json.load(f)
     except FileNotFoundError:
         raise DataLoadError(f"File not found: {filepath}")
@@ -112,11 +111,6 @@ def load_feedback_data(filepath: Path, encoding: str = "utf-8") -> list[dict]:
         raise DataLoadError(f"Invalid JSON in {filepath}: {e}")
     except PermissionError:
         raise DataLoadError(f"Permission denied reading {filepath}")
-    except UnicodeDecodeError as e:
-        raise DataLoadError(
-            f"Encoding error in {filepath}: {e}. "
-            f"Try specifying --encoding (e.g., --encoding gbk or --encoding utf-8-sig)"
-        )
 
     if not isinstance(data, list):
         raise DataValidationError(f"Expected list of records, got {type(data).__name__}")
@@ -488,11 +482,6 @@ Examples:
         help=f"Timezone for date interpretation (default: {DEFAULT_TIMEZONE})",
     )
     parser.add_argument(
-        "--encoding",
-        default="utf-8",
-        help="Input file encoding (default: utf-8). Try 'gbk' for Chinese or 'utf-8-sig' for BOM",
-    )
-    parser.add_argument(
         "--no-export",
         action="store_true",
         help="Skip exporting filtered data and statistics",
@@ -530,8 +519,8 @@ def main(args: list[str] | None = None) -> int:
 
     try:
         # Load data
-        logger.info(f"Loading data from {parsed.input} (encoding: {parsed.encoding})...")
-        data = load_feedback_data(parsed.input, encoding=parsed.encoding)
+        logger.info(f"Loading data from {parsed.input}...")
+        data = load_feedback_data(parsed.input)
         logger.info(f"Loaded {len(data)} total records")
 
         # Remove sources key

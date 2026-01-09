@@ -18,6 +18,8 @@ from typing import Any
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 
 # Constants
 DEFAULT_TIMEZONE = "Asia/Hong_Kong"
@@ -1352,6 +1354,101 @@ def generate_html_report(stats: dict, df: pd.DataFrame, filepath: Path) -> None:
         raise FeedbackAnalyzerError(f"Failed to generate HTML report: {e}")
 
 
+def generate_chart_image(stats: dict, filepath: Path) -> None:
+    """Generate static PNG chart for email/presentations.
+
+    Args:
+        stats: Statistics dictionary from generate_statistics
+        filepath: Output PNG file path
+    """
+    temporal = stats.get("temporal_analysis", {})
+    by_month = temporal.get("by_month", {})
+    by_month_acc = temporal.get("by_month_accuracy", {})
+
+    if not by_month or len(by_month) < 2:
+        logger.warning("Not enough monthly data to generate chart")
+        return
+
+    # Prepare data
+    months = sorted(by_month.keys())
+    volumes = [by_month[m] for m in months]
+    accuracies = [by_month_acc.get(m, 0) * 100 for m in months]  # Convert to percentage
+
+    # Create figure with dual y-axes
+    fig, ax1 = plt.subplots(figsize=(12, 6))
+
+    # Style
+    plt.style.use('seaborn-v0_8-whitegrid')
+    fig.patch.set_facecolor('white')
+
+    # X-axis positions
+    x = range(len(months))
+
+    # Volume bars (left y-axis)
+    bars = ax1.bar(x, volumes, color='#3498db', alpha=0.7, label='Feedback Volume', width=0.6)
+    ax1.set_xlabel('Month', fontsize=12, fontweight='bold')
+    ax1.set_ylabel('Feedback Volume', color='#3498db', fontsize=12, fontweight='bold')
+    ax1.tick_params(axis='y', labelcolor='#3498db')
+    ax1.set_xticks(x)
+    ax1.set_xticklabels([m[-2:] + '/' + m[2:4] for m in months], fontsize=10)  # MM/YY format
+
+    # Add volume labels on bars
+    for bar, vol in zip(bars, volumes):
+        ax1.text(bar.get_x() + bar.get_width()/2, bar.get_height() + max(volumes)*0.02,
+                 str(vol), ha='center', va='bottom', fontsize=9, color='#3498db')
+
+    # Accuracy line (right y-axis)
+    ax2 = ax1.twinx()
+    line = ax2.plot(x, accuracies, color='#27ae60', marker='o', linewidth=3,
+                    markersize=10, label='Accuracy Rate', markerfacecolor='white',
+                    markeredgewidth=2)
+    ax2.set_ylabel('Accuracy Rate (%)', color='#27ae60', fontsize=12, fontweight='bold')
+    ax2.tick_params(axis='y', labelcolor='#27ae60')
+    ax2.set_ylim(0, 100)
+
+    # Add accuracy labels on points
+    for i, acc in enumerate(accuracies):
+        ax2.text(i, acc + 3, f'{acc:.1f}%', ha='center', va='bottom',
+                 fontsize=9, color='#27ae60', fontweight='bold')
+
+    # Title
+    date_range = stats.get("overview", {}).get("date_range", {})
+    start = date_range.get("earliest", "")[:7]  # YYYY-MM
+    end = date_range.get("latest", "")[:7]
+    plt.title(f'Chatbot Performance: Monthly Volume & Accuracy\n{start} to {end}',
+              fontsize=14, fontweight='bold', pad=20)
+
+    # Legend
+    lines1, labels1 = ax1.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+    ax1.legend(lines1 + lines2, labels1 + labels2, loc='upper left', fontsize=10)
+
+    # Summary stats box
+    total_vol = sum(volumes)
+    avg_acc = sum(accuracies) / len(accuracies)
+    latest_acc = accuracies[-1]
+    first_acc = accuracies[0]
+    acc_change = latest_acc - first_acc
+
+    summary_text = (f'Total Feedback: {total_vol:,}\n'
+                   f'Avg Accuracy: {avg_acc:.1f}%\n'
+                   f'Accuracy Change: {"+" if acc_change >= 0 else ""}{acc_change:.1f}pp')
+
+    props = dict(boxstyle='round', facecolor='#f8f9fa', alpha=0.9, edgecolor='#dee2e6')
+    ax1.text(0.98, 0.98, summary_text, transform=ax1.transAxes, fontsize=10,
+             verticalalignment='top', horizontalalignment='right', bbox=props)
+
+    plt.tight_layout()
+
+    try:
+        plt.savefig(filepath, dpi=150, bbox_inches='tight', facecolor='white', edgecolor='none')
+        plt.close()
+        logger.info(f"Chart image generated: {filepath}")
+    except (OSError, PermissionError) as e:
+        plt.close()
+        raise FeedbackAnalyzerError(f"Failed to generate chart image: {e}")
+
+
 def parse_args(args: list[str] | None = None) -> argparse.Namespace:
     """Parse command line arguments.
 
@@ -1418,6 +1515,11 @@ Examples:
         "--html",
         action="store_true",
         help="Generate interactive HTML report for stakeholders",
+    )
+    parser.add_argument(
+        "--chart",
+        action="store_true",
+        help="Generate static PNG chart for emails/presentations",
     )
 
     return parser.parse_args(args)
@@ -1496,6 +1598,12 @@ def main(args: list[str] | None = None) -> int:
                 html_file = parsed.output_dir / f"{actual_start}-{actual_end}-report.html"
                 logger.info(f"Generating HTML report to {html_file}...")
                 generate_html_report(stats, df, html_file)
+
+            # Generate static chart image if requested
+            if parsed.chart:
+                chart_file = parsed.output_dir / f"{actual_start}-{actual_end}-chart.png"
+                logger.info(f"Generating chart image to {chart_file}...")
+                generate_chart_image(stats, chart_file)
 
         logger.info("Done!")
         return 0

@@ -7,6 +7,7 @@ Analyze feedback data exported from Open WebUI, generating comprehensive statist
 - Python 3.7+
 - pandas
 - plotly (for HTML reports)
+- matplotlib (for static chart images)
 
 ## Installation
 
@@ -31,6 +32,7 @@ python analyzer.py <input_file> [options]
 | `--timezone` | `Asia/Hong_Kong` | Timezone for date interpretation |
 | `--no-export` | - | Skip exporting filtered data and statistics |
 | `--html` | - | Generate interactive HTML report for stakeholders |
+| `--chart` | - | Generate static PNG chart for emails/presentations |
 | `-q, --quiet` | - | Suppress output (only show errors) |
 | `-v, --verbose` | - | Enable verbose logging |
 
@@ -51,6 +53,9 @@ python analyzer.py feedback.json -s 2025-12-01 -e 2025-12-09 --timezone UTC -o .
 
 # Generate HTML report for stakeholders
 python analyzer.py feedback.json --html
+
+# Generate static PNG chart for email
+python analyzer.py feedback.json --chart
 ```
 
 ## Output
@@ -72,7 +77,13 @@ The analyzer generates the following output files:
    - **File analysis** - Correlation between file attachments and ratings
    - **Trend analysis** - Week-on-week and month-on-month comparisons
 
-3. `{start_date}-{end_date}-report.html` (with `--html` flag) - Interactive HTML report featuring:
+3. `{start_date}-{end_date}-chart.png` (with `--chart` flag) - Static chart image featuring:
+   - Monthly volume bars with values
+   - Accuracy trend line with percentage labels
+   - Summary box with total feedback and accuracy change
+   - Perfect for embedding in emails or presentations
+
+4. `{start_date}-{end_date}-report.html` (with `--html` flag) - Interactive HTML report featuring:
    - KPI cards with WoW/MoM trends
    - Daily and weekly volume/accuracy charts
    - Rating distribution pie chart

@@ -558,10 +558,10 @@ def print_statistics(stats: dict) -> None:
             label = str(display_r)[:25]
             print(f"  {label:<27} {count:>5}  ({rate:>5.1%} +)  {_format_bar(count, max_count)}")
 
-    # Model Analysis
+    # Model Analysis (only show if multiple models)
     model = stats["model_analysis"]
     model_dist = model["distribution"]
-    if model_dist:
+    if model_dist and len(model_dist) > 1:
         print(f"\nMODEL ANALYSIS")
         max_count = max((v for v in model_dist.values() if v), default=1)
         sorted_models = sorted(model_dist.items(), key=lambda x: x[1] or 0, reverse=True)

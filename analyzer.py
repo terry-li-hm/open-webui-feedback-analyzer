@@ -658,11 +658,11 @@ def print_statistics(stats: dict) -> None:
         neg_comments = comments.get("negative_feedback_comments", [])
         if neg_comments:
             print(f"  Negative feedback comments ({len(neg_comments)}):")
-            for c in neg_comments[:5]:  # Show up to 5
-                comment_preview = str(c)[:50] + "..." if len(str(c)) > 50 else str(c)
+            for c in neg_comments[:15]:  # Show up to 15
+                comment_preview = str(c)[:150] + "..." if len(str(c)) > 150 else str(c)
                 print(f"    - {comment_preview}")
-            if len(neg_comments) > 5:
-                print(f"    ... and {len(neg_comments) - 5} more")
+            if len(neg_comments) > 15:
+                print(f"    ... and {len(neg_comments) - 15} more")
 
     # Tag Analysis
     tags = stats.get("tag_analysis", {})

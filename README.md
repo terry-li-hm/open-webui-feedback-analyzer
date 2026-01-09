@@ -16,21 +16,16 @@ pip install -r requirements.txt
 ## Usage
 
 ```bash
-python analyzer.py <input_file> -s <start_date> -e <end_date> [options]
+python analyzer.py <input_file> [options]
 ```
 
-### Required Arguments
-
-| Argument | Description |
-|----------|-------------|
-| `input_file` | Path to feedback JSON file exported from Open WebUI |
-| `-s, --start` | Start date (YYYY-MM-DD) |
-| `-e, --end` | End date (YYYY-MM-DD) |
-
-### Optional Arguments
+### Arguments
 
 | Argument | Default | Description |
 |----------|---------|-------------|
+| `input_file` | (required) | Path to feedback JSON file exported from Open WebUI |
+| `-s, --start` | (all) | Start date (YYYY-MM-DD). If omitted, includes all past data |
+| `-e, --end` | (all) | End date (YYYY-MM-DD). If omitted, includes up to latest data |
 | `-o, --output-dir` | `.` | Output directory for exported files |
 | `--timezone` | `Asia/Hong_Kong` | Timezone for date interpretation |
 | `--no-export` | - | Skip exporting filtered data and statistics |
@@ -40,7 +35,13 @@ python analyzer.py <input_file> -s <start_date> -e <end_date> [options]
 ### Examples
 
 ```bash
-# Basic usage
+# Analyze all data
+python analyzer.py feedback.json
+
+# From a specific date to now
+python analyzer.py feedback.json -s 2025-07-01
+
+# Specific date range
 python analyzer.py feedback.json -s 2025-12-01 -e 2025-12-09
 
 # With custom timezone and output directory

@@ -120,16 +120,16 @@ def load_feedback_data(filepath: Path) -> list[dict]:
 
 def filter_by_date_range(
     data: list[dict],
-    start_date: str,
-    end_date: str,
+    start_date: str | None = None,
+    end_date: str | None = None,
     timezone: str = DEFAULT_TIMEZONE,
 ) -> pd.DataFrame:
     """Filter feedback records by date range using root-level created_at.
 
     Args:
         data: List of feedback records
-        start_date: Start date (YYYY-MM-DD)
-        end_date: End date (YYYY-MM-DD)
+        start_date: Start date (YYYY-MM-DD), or None for no lower bound
+        end_date: End date (YYYY-MM-DD), or None for no upper bound
         timezone: Timezone for date interpretation
 
     Returns:
@@ -150,10 +150,19 @@ def filter_by_date_range(
         df["created_at"], unit=TIMESTAMP_UNIT, utc=True
     ).dt.tz_convert(timezone)
 
-    start = pd.Timestamp(start_date, tz=timezone)
-    end = pd.Timestamp(end_date, tz=timezone) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
+    # If no dates specified, return all data
+    if start_date is None and end_date is None:
+        return df.reset_index(drop=True)
 
-    mask = df["created_at"].between(start, end)
+    # Apply date filters
+    mask = pd.Series([True] * len(df))
+    if start_date is not None:
+        start = pd.Timestamp(start_date, tz=timezone)
+        mask &= df["created_at"] >= start
+    if end_date is not None:
+        end = pd.Timestamp(end_date, tz=timezone) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
+        mask &= df["created_at"] <= end
+
     return df[mask].reset_index(drop=True)
 
 
@@ -746,8 +755,9 @@ def parse_args(args: list[str] | None = None) -> argparse.Namespace:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  %(prog)s feedback.json --start 2025-12-01 --end 2025-12-09
-  %(prog)s feedback.json -s 2025-12-01 -e 2025-12-09 --timezone UTC
+  %(prog)s feedback.json                                    # All data
+  %(prog)s feedback.json -s 2025-07-01                      # From date to now
+  %(prog)s feedback.json -s 2025-12-01 -e 2025-12-09        # Date range
   %(prog)s feedback.json -s 2025-12-01 -e 2025-12-09 -o ./output
         """,
     )
@@ -759,13 +769,13 @@ Examples:
     )
     parser.add_argument(
         "-s", "--start",
-        required=True,
-        help="Start date (YYYY-MM-DD)",
+        default=None,
+        help="Start date (YYYY-MM-DD). If omitted, includes all past data",
     )
     parser.add_argument(
         "-e", "--end",
-        required=True,
-        help="End date (YYYY-MM-DD)",
+        default=None,
+        help="End date (YYYY-MM-DD). If omitted, includes up to latest data",
     )
     parser.add_argument(
         "-o", "--output-dir",
@@ -825,7 +835,12 @@ def main(args: list[str] | None = None) -> int:
         filtered_data = delete_keys_from_nested_json(data, "sources")
 
         # Filter by date
-        logger.info(f"Filtering to date range {parsed.start} to {parsed.end}...")
+        if parsed.start or parsed.end:
+            date_desc = f"{parsed.start or 'beginning'} to {parsed.end or 'latest'}"
+        else:
+            date_desc = "all data"
+        logger.info(f"Filtering to {date_desc}...")
+
         df = filter_by_date_range(
             filtered_data,
             parsed.start,
@@ -848,11 +863,15 @@ def main(args: list[str] | None = None) -> int:
         if not parsed.no_export:
             parsed.output_dir.mkdir(parents=True, exist_ok=True)
 
-            data_file = parsed.output_dir / f"{parsed.start}-{parsed.end}-data.json"
+            # Use actual date range from data for filename if not specified
+            actual_start = parsed.start or df["created_at"].min().strftime("%Y-%m-%d")
+            actual_end = parsed.end or df["created_at"].max().strftime("%Y-%m-%d")
+
+            data_file = parsed.output_dir / f"{actual_start}-{actual_end}-data.json"
             logger.info(f"Exporting data to {data_file}...")
             export_to_json(df, data_file)
 
-            stats_file = parsed.output_dir / f"{parsed.start}-{parsed.end}-statistics.json"
+            stats_file = parsed.output_dir / f"{actual_start}-{actual_end}-statistics.json"
             logger.info(f"Exporting statistics to {stats_file}...")
             export_statistics(stats, stats_file)
 

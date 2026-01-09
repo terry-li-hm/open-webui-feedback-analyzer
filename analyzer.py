@@ -15,7 +15,6 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
-from tqdm import tqdm
 
 # Constants
 DEFAULT_TIMEZONE = "Asia/Hong_Kong"
@@ -287,7 +286,7 @@ def _analyze_temporal(df: pd.DataFrame) -> dict:
     }
 
 
-def _analyze_rag(df: pd.DataFrame, show_progress: bool = False) -> dict:
+def _analyze_rag(df: pd.DataFrame) -> dict:
     """Generate RAG (Retrieval Augmented Generation) statistics."""
     if "snapshot" not in df.columns:
         return {}
@@ -296,11 +295,7 @@ def _analyze_rag(df: pd.DataFrame, show_progress: bool = False) -> dict:
     query_counts: list[int] = []
     action_counter: Counter = Counter()
 
-    iterator = df.iterrows()
-    if show_progress:
-        iterator = tqdm(iterator, total=len(df), desc="Analyzing RAG data")
-
-    for _, row in iterator:
+    for _, row in df.iterrows():
         snapshot = row.get("snapshot", {})
         history = safe_get(snapshot, "history", default={})
         messages = history.get("messages", [])
@@ -340,12 +335,11 @@ def _analyze_rag(df: pd.DataFrame, show_progress: bool = False) -> dict:
     return stats
 
 
-def generate_statistics(df: pd.DataFrame, show_progress: bool = False) -> dict:
+def generate_statistics(df: pd.DataFrame) -> dict:
     """Generate comprehensive statistics from feedback data.
 
     Args:
         df: DataFrame containing feedback data
-        show_progress: Whether to show progress bar for long operations
 
     Returns:
         Dictionary containing all statistics
@@ -358,7 +352,7 @@ def generate_statistics(df: pd.DataFrame, show_progress: bool = False) -> dict:
         "reason_analysis": _analyze_reasons(df),
         "model_analysis": _analyze_models(df),
         "temporal_analysis": _analyze_temporal(df),
-        "rag_analysis": _analyze_rag(df, show_progress=show_progress),
+        "rag_analysis": _analyze_rag(df),
     }
 
 
@@ -503,11 +497,6 @@ Examples:
         help="Skip exporting filtered data and statistics",
     )
     parser.add_argument(
-        "--progress",
-        action="store_true",
-        help="Show progress bar for long operations",
-    )
-    parser.add_argument(
         "-q", "--quiet",
         action="store_true",
         help="Suppress output (only show errors)",
@@ -563,7 +552,7 @@ def main(args: list[str] | None = None) -> int:
             return 0
 
         # Generate statistics
-        stats = generate_statistics(df, show_progress=parsed.progress)
+        stats = generate_statistics(df)
 
         if not parsed.quiet:
             print_statistics(stats)

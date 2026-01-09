@@ -554,8 +554,8 @@ def print_statistics(stats: dict) -> None:
                 display_r = r
             count = count or 0
             rate = reason["thumbs_up_rate_by_reason"].get(r, 0)
-            label = str(display_r)[:18]
-            print(f"  {label:<20} {count:>5}  ({rate:>5.1%} +)  {_format_bar(count, max_count)}")
+            label = str(display_r)[:25]
+            print(f"  {label:<27} {count:>5}  ({rate:>5.1%} +)  {_format_bar(count, max_count)}")
 
     # Model Analysis
     model = stats["model_analysis"]
@@ -571,8 +571,8 @@ def print_statistics(stats: dict) -> None:
                 display_m = m
             count = count or 0
             rate = model["thumbs_up_rate_by_model"].get(m, 0)
-            label = str(display_m)[:18]
-            print(f"  {label:<20} {count:>5}  ({rate:>5.1%} +)  {_format_bar(count, max_count)}")
+            label = str(display_m)[:35]
+            print(f"  {label:<37} {count:>5}  ({rate:>5.1%} +)  {_format_bar(count, max_count)}")
 
     # RAG Analysis
     rag = stats["rag_analysis"]

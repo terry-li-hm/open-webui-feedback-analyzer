@@ -25,3 +25,10 @@ build/
 # OS
 .DS_Store
 Thumbs.db
+
+# Local notes (business context, not for public repo)
+NOTES.md
+
+# Output files
+*.png
+*.html

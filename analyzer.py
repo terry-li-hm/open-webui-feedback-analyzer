@@ -519,8 +519,9 @@ def print_statistics(stats: dict) -> None:
     print(f"\nOVERVIEW")
     print(f"  {'Total records:':<20} {overview['total_records']:>6}")
     print(f"  {'Date range:':<20} {start_date} to {end_date}")
-    if "archived_chats" in overview:
+    if overview.get("archived_chats", 0) > 0:
         print(f"  {'Archived chats:':<20} {overview['archived_chats']:>6}")
+    if overview.get("pinned_chats", 0) > 0:
         print(f"  {'Pinned chats:':<20} {overview['pinned_chats']:>6}")
 
     # Rating Analysis

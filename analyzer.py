@@ -193,9 +193,11 @@ def export_to_json(df: pd.DataFrame, filepath: Path) -> None:
     """
     try:
         df = df.copy()
-        df["created_at"] = df["created_at"].astype("int64") // 10**9
+        # Convert timezone-aware datetime to Unix timestamp (seconds)
+        df["created_at"] = df["created_at"].apply(lambda x: int(x.timestamp()))
         if "updated_at" in df.columns:
-            df["updated_at"] = pd.to_datetime(df["updated_at"], unit=TIMESTAMP_UNIT).astype("int64") // 10**9
+            df["updated_at"] = pd.to_datetime(df["updated_at"], unit=TIMESTAMP_UNIT)
+            df["updated_at"] = df["updated_at"].apply(lambda x: int(x.timestamp()) if pd.notna(x) else None)
 
         with open(filepath, "w", encoding="utf-8") as f:
             json.dump(df.to_dict("records"), f, indent=4, ensure_ascii=False)

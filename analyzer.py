@@ -283,14 +283,21 @@ def _analyze_models(df: pd.DataFrame) -> dict:
 
 def _analyze_temporal(df: pd.DataFrame) -> dict:
     """Generate temporal statistics."""
+    # Monthly stats: group by year-month
+    monthly = df["created_at"].dt.to_period("M").astype(str).value_counts().sort_index().to_dict()
+
     # Weekly stats: group by year-week
     weekly = df["created_at"].dt.to_period("W").astype(str).value_counts().sort_index().to_dict()
+
+    # Daily stats
+    daily = df["created_at"].dt.date.astype(str).value_counts().sort_index().to_dict()
 
     return {
         "by_hour": df["created_at"].dt.hour.value_counts().sort_index().to_dict(),
         "by_day_of_week": df["created_at"].dt.day_name().value_counts().to_dict(),
+        "by_month": monthly,
         "by_week": weekly,
-        "by_date": df["created_at"].dt.date.astype(str).value_counts().sort_index().to_dict(),
+        "by_date": daily,
     }
 
 
@@ -612,22 +619,46 @@ def print_statistics(stats: dict) -> None:
     # Temporal Analysis
     temporal = stats["temporal_analysis"]
 
-    # Weekly
+    # Monthly (always show all)
+    by_month = temporal.get("by_month", {})
+    if by_month:
+        print(f"\nMONTHLY ACTIVITY")
+        max_count = max(by_month.values(), default=1)
+        for month, count in sorted(by_month.items()):
+            print(f"  {month:<15} {count:>5}  {_format_bar(count, max_count)}")
+
+    # Weekly (last 8 weeks)
     by_week = temporal.get("by_week", {})
     if by_week:
-        print(f"\nWEEKLY ACTIVITY")
-        max_count = max(by_week.values(), default=1)
-        for week, count in sorted(by_week.items()):
-            print(f"  {week:<15} {count:>5}  {_format_bar(count, max_count)}")
+        sorted_weeks = sorted(by_week.items())
+        recent_weeks = sorted_weeks[-8:]  # Last 8 weeks
+        if recent_weeks:
+            total_weeks = len(sorted_weeks)
+            header = f"WEEKLY ACTIVITY (last {len(recent_weeks)}"
+            if total_weeks > 8:
+                header += f" of {total_weeks}"
+            header += " weeks)"
+            print(f"\n{header}")
+            max_count = max(c for _, c in recent_weeks)
+            for week, count in recent_weeks:
+                print(f"  {week:<15} {count:>5}  {_format_bar(count, max_count)}")
 
-    # Daily
+    # Daily (last 14 days)
     by_date = temporal.get("by_date", {})
     if by_date:
-        print(f"\nDAILY ACTIVITY")
-        max_count = max(by_date.values(), default=1)
-        for date, count in sorted(by_date.items()):
-            short_date = _format_date_short(date)
-            print(f"  {short_date:<15} {count:>5}  {_format_bar(count, max_count)}")
+        sorted_dates = sorted(by_date.items())
+        recent_dates = sorted_dates[-14:]  # Last 14 days
+        if recent_dates:
+            total_days = len(sorted_dates)
+            header = f"DAILY ACTIVITY (last {len(recent_dates)}"
+            if total_days > 14:
+                header += f" of {total_days}"
+            header += " days)"
+            print(f"\n{header}")
+            max_count = max(c for _, c in recent_dates)
+            for date, count in recent_dates:
+                short_date = _format_date_short(date)
+                print(f"  {short_date:<15} {count:>5}  {_format_bar(count, max_count)}")
 
     # Day of week
     by_dow = temporal.get("by_day_of_week", {})

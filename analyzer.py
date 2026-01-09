@@ -5,6 +5,7 @@ Open WebUI Feedback Analyzer
 Analyze feedback data exported from Open WebUI, generating comprehensive
 statistics on ratings, models, reasons, temporal patterns, and RAG usage.
 """
+from __future__ import annotations
 
 import argparse
 import json

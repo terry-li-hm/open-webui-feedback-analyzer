@@ -274,9 +274,13 @@ def _analyze_models(df: pd.DataFrame) -> dict:
 
 def _analyze_temporal(df: pd.DataFrame) -> dict:
     """Generate temporal statistics."""
+    # Weekly stats: group by year-week
+    weekly = df["created_at"].dt.to_period("W").astype(str).value_counts().sort_index().to_dict()
+
     return {
         "by_hour": df["created_at"].dt.hour.value_counts().sort_index().to_dict(),
         "by_day_of_week": df["created_at"].dt.day_name().value_counts().to_dict(),
+        "by_week": weekly,
         "by_date": df["created_at"].dt.date.astype(str).value_counts().sort_index().to_dict(),
     }
 
@@ -598,13 +602,23 @@ def print_statistics(stats: dict) -> None:
 
     # Temporal Analysis
     temporal = stats["temporal_analysis"]
+
+    # Weekly
+    by_week = temporal.get("by_week", {})
+    if by_week:
+        print(f"\nWEEKLY ACTIVITY")
+        max_count = max(by_week.values(), default=1)
+        for week, count in sorted(by_week.items()):
+            print(f"  {week:<15} {count:>5}  {_format_bar(count, max_count)}")
+
+    # Daily
     by_date = temporal.get("by_date", {})
     if by_date:
         print(f"\nDAILY ACTIVITY")
         max_count = max(by_date.values(), default=1)
         for date, count in sorted(by_date.items()):
             short_date = _format_date_short(date)
-            print(f"  {short_date:<10} {count:>5}  {_format_bar(count, max_count)}")
+            print(f"  {short_date:<15} {count:>5}  {_format_bar(count, max_count)}")
 
     # Day of week
     by_dow = temporal.get("by_day_of_week", {})

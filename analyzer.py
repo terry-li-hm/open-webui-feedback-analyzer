@@ -489,8 +489,8 @@ def _format_bar(value: float, max_value: float, width: int = 10) -> str:
     return "#" * filled + "-" * (width - filled)
 
 
-def _format_date_short(iso_date: str) -> str:
-    """Convert ISO date to short format (MM-DD)."""
+def _format_date_short(iso_date: str, include_year: bool = True) -> str:
+    """Convert ISO date to short format (YYYY-MM-DD or MM-DD)."""
     try:
         # Handle both ISO format and date strings
         if "T" in iso_date:
@@ -498,9 +498,11 @@ def _format_date_short(iso_date: str) -> str:
         else:
             date_part = iso_date
         parts = date_part.split("-")
+        if include_year:
+            return f"{parts[0]}-{parts[1]}-{parts[2]}"
         return f"{parts[1]}-{parts[2]}"
     except (IndexError, AttributeError):
-        return str(iso_date)[:5]
+        return str(iso_date)[:10]
 
 
 def print_statistics(stats: dict) -> None:

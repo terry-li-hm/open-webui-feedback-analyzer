@@ -627,9 +627,10 @@ def print_statistics(stats: dict) -> None:
             count = dist[rating]
             print(f"  {int(rating):<20} {count:>5}  {_format_bar(count, max_count)}")
 
-    # Feedback Position
+    # Feedback Position (only show if there's variance)
     position = stats.get("feedback_position", {})
-    if position.get("average_position") is not None:
+    pos_dist = position.get("position_distribution", {})
+    if position.get("average_position") is not None and len(pos_dist) > 1:
         print(f"\nFEEDBACK POSITION")
         print(f"  {'Avg message index:':<20} {position['average_position']:>5.1f}")
         if "average_position_by_rating" in position:

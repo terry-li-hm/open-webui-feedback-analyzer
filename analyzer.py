@@ -297,7 +297,16 @@ def _analyze_models(df: pd.DataFrame) -> dict:
 def _analyze_temporal(df: pd.DataFrame) -> dict:
     """Generate temporal statistics."""
     # Monthly stats: group by year-month
-    monthly = df["created_at"].dt.to_period("M").astype(str).value_counts().sort_index().to_dict()
+    df_copy = df.copy()
+    df_copy["month_period"] = df_copy["created_at"].dt.to_period("M").astype(str)
+    monthly = df_copy["month_period"].value_counts().sort_index().to_dict()
+
+    # Monthly accuracy
+    ratings = df_copy["data"].apply(lambda x: safe_get(x, "rating"))
+    df_copy["rating"] = ratings
+    monthly_accuracy = df_copy.groupby("month_period").apply(
+        lambda x: (x["rating"] == RATING_THUMBS_UP).sum() / len(x) if len(x) > 0 else 0
+    ).sort_index().to_dict()
 
     # Weekly stats: group by year-week
     weekly = df["created_at"].dt.to_period("W").astype(str).value_counts().sort_index().to_dict()
@@ -309,6 +318,7 @@ def _analyze_temporal(df: pd.DataFrame) -> dict:
         "by_hour": df["created_at"].dt.hour.value_counts().sort_index().to_dict(),
         "by_day_of_week": df["created_at"].dt.day_name().value_counts().to_dict(),
         "by_month": monthly,
+        "by_month_accuracy": monthly_accuracy,
         "by_week": weekly,
         "by_date": daily,
     }
@@ -743,13 +753,68 @@ def print_statistics(stats: dict) -> None:
     # Temporal Analysis
     temporal = stats["temporal_analysis"]
 
-    # Monthly (always show all)
+    # Monthly (dual-axis chart with volume and accuracy)
     by_month = temporal.get("by_month", {})
-    if by_month:
-        print(f"\nMONTHLY ACTIVITY")
-        max_count = max(by_month.values(), default=1)
-        for month, count in sorted(by_month.items()):
-            print(f"  {month:<15} {count:>5}  {_format_bar(count, max_count)}")
+    by_month_acc = temporal.get("by_month_accuracy", {})
+    if by_month and len(by_month) > 1:
+        print(f"\nMONTHLY VOLUME & ACCURACY TREND")
+        months = sorted(by_month.keys())[-12:]  # Last 12 months
+        volumes = [by_month[m] for m in months]
+        accuracies = [by_month_acc.get(m, 0) for m in months]
+
+        max_vol = max(volumes) if volumes else 1
+        chart_height = 8
+        vol_scale = chart_height / max_vol if max_vol > 0 else 1
+
+        # Build the chart rows
+        chart_rows = []
+        for row in range(chart_height, 0, -1):
+            row_chars = []
+            for i, (vol, acc) in enumerate(zip(volumes, accuracies)):
+                vol_height = int(vol * vol_scale)
+                acc_row = int(acc * chart_height)  # accuracy 0-1 maps to 0-chart_height
+
+                if vol_height >= row:
+                    # Volume bar
+                    char = "██"
+                else:
+                    char = "  "
+
+                # Overlay accuracy marker
+                if acc_row == row or (row == 1 and acc_row == 0):
+                    if vol_height >= row:
+                        char = "●█"
+                    else:
+                        char = "● "
+
+                row_chars.append(char)
+            chart_rows.append(row_chars)
+
+        # Print chart with Y-axis labels
+        print(f"  Vol {max_vol:>4}│" + "".join(chart_rows[0]) + f"│100%")
+        for i, row in enumerate(chart_rows[1:-1], 1):
+            vol_label = int(max_vol * (chart_height - i) / chart_height)
+            acc_label = int(100 * (chart_height - i) / chart_height)
+            print(f"      {vol_label:>4}│" + "".join(row) + f"│{acc_label:>3}%")
+        print(f"         0│" + "".join(chart_rows[-1]) + f"│  0%")
+
+        # X-axis
+        print(f"          └" + "──" * len(months) + "┘")
+
+        # Month labels (abbreviated)
+        month_labels = [m[-2:] for m in months]  # Just show MM part
+        print(f"           " + "".join(f"{m:>2}" for m in month_labels))
+
+        # Legend
+        print(f"          ██ Volume   ● Accuracy")
+
+        # Summary table below chart
+        print(f"\n  {'Month':<10} {'Volume':>8} {'Accuracy':>10}")
+        print(f"  {'-'*10} {'-'*8} {'-'*10}")
+        for m in months:
+            vol = by_month[m]
+            acc = by_month_acc.get(m, 0)
+            print(f"  {m:<10} {vol:>8} {acc:>9.1%}")
 
     # Weekly (last N weeks)
     by_week = temporal.get("by_week", {})

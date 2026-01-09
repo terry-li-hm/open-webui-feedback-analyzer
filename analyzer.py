@@ -753,68 +753,47 @@ def print_statistics(stats: dict) -> None:
     # Temporal Analysis
     temporal = stats["temporal_analysis"]
 
-    # Monthly (dual-axis chart with volume and accuracy)
+    # Monthly trend with change indicators
     by_month = temporal.get("by_month", {})
     by_month_acc = temporal.get("by_month_accuracy", {})
     if by_month and len(by_month) > 1:
-        print(f"\nMONTHLY VOLUME & ACCURACY TREND")
+        print(f"\nMONTHLY TREND")
         months = sorted(by_month.keys())[-12:]  # Last 12 months
-        volumes = [by_month[m] for m in months]
-        accuracies = [by_month_acc.get(m, 0) for m in months]
 
-        max_vol = max(volumes) if volumes else 1
-        chart_height = 8
-        vol_scale = chart_height / max_vol if max_vol > 0 else 1
+        # Header
+        print(f"  {'Month':<10} {'Volume':>7} {'Chg':>7}   {'Accuracy':<12} {'Chg':>6}")
+        print(f"  {'-'*10} {'-'*7} {'-'*7}   {'-'*12} {'-'*6}")
 
-        # Build the chart rows
-        chart_rows = []
-        for row in range(chart_height, 0, -1):
-            row_chars = []
-            for i, (vol, acc) in enumerate(zip(volumes, accuracies)):
-                vol_height = int(vol * vol_scale)
-                acc_row = int(acc * chart_height)  # accuracy 0-1 maps to 0-chart_height
-
-                if vol_height >= row:
-                    # Volume bar
-                    char = "██"
-                else:
-                    char = "  "
-
-                # Overlay accuracy marker
-                if acc_row == row or (row == 1 and acc_row == 0):
-                    if vol_height >= row:
-                        char = "●█"
-                    else:
-                        char = "● "
-
-                row_chars.append(char)
-            chart_rows.append(row_chars)
-
-        # Print chart with Y-axis labels
-        print(f"  Vol {max_vol:>4}│" + "".join(chart_rows[0]) + f"│100%")
-        for i, row in enumerate(chart_rows[1:-1], 1):
-            vol_label = int(max_vol * (chart_height - i) / chart_height)
-            acc_label = int(100 * (chart_height - i) / chart_height)
-            print(f"      {vol_label:>4}│" + "".join(row) + f"│{acc_label:>3}%")
-        print(f"         0│" + "".join(chart_rows[-1]) + f"│  0%")
-
-        # X-axis
-        print(f"          └" + "──" * len(months) + "┘")
-
-        # Month labels (abbreviated)
-        month_labels = [m[-2:] for m in months]  # Just show MM part
-        print(f"           " + "".join(f"{m:>2}" for m in month_labels))
-
-        # Legend
-        print(f"          ██ Volume   ● Accuracy")
-
-        # Summary table below chart
-        print(f"\n  {'Month':<10} {'Volume':>8} {'Accuracy':>10}")
-        print(f"  {'-'*10} {'-'*8} {'-'*10}")
+        prev_vol = None
+        prev_acc = None
         for m in months:
             vol = by_month[m]
             acc = by_month_acc.get(m, 0)
-            print(f"  {m:<10} {vol:>8} {acc:>9.1%}")
+
+            # Volume change
+            if prev_vol is None:
+                vol_chg = "     -"
+            else:
+                pct_chg = (vol - prev_vol) / prev_vol if prev_vol > 0 else 0
+                arrow = "↑" if pct_chg > 0 else "↓" if pct_chg < 0 else "→"
+                vol_chg = f"{arrow}{abs(pct_chg):>5.0%}"
+
+            # Accuracy change (percentage points)
+            if prev_acc is None:
+                acc_chg = "    -"
+            else:
+                pp_chg = (acc - prev_acc) * 100  # Convert to percentage points
+                arrow = "↑" if pp_chg > 0 else "↓" if pp_chg < 0 else "→"
+                acc_chg = f"{arrow}{abs(pp_chg):>4.1f}pp"
+
+            # Accuracy bar (10 chars wide, showing 0-100%)
+            bar_filled = int(acc * 10)
+            acc_bar = "█" * bar_filled + "░" * (10 - bar_filled)
+
+            print(f"  {m:<10} {vol:>7} {vol_chg}   {acc_bar} {acc:>5.1%} {acc_chg}")
+
+            prev_vol = vol
+            prev_acc = acc
 
     # Weekly (last N weeks)
     by_week = temporal.get("by_week", {})

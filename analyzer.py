@@ -735,7 +735,9 @@ def print_statistics(stats: dict) -> None:
         if neg_comments:
             print(f"  Negative feedback comments ({len(neg_comments)}):")
             for c in neg_comments[:COMMENT_DISPLAY_LIMIT]:
-                comment_preview = str(c)[:COMMENT_TRUNCATE_LENGTH] + "..." if len(str(c)) > COMMENT_TRUNCATE_LENGTH else str(c)
+                # Replace newlines with visible indicator for compact display
+                comment_text = str(c).replace("\r\n", " ↵ ").replace("\n", " ↵ ").replace("\r", " ↵ ")
+                comment_preview = comment_text[:COMMENT_TRUNCATE_LENGTH] + "..." if len(comment_text) > COMMENT_TRUNCATE_LENGTH else comment_text
                 print(f"    - {comment_preview}")
             if len(neg_comments) > COMMENT_DISPLAY_LIMIT:
                 print(f"    ... and {len(neg_comments) - COMMENT_DISPLAY_LIMIT} more")

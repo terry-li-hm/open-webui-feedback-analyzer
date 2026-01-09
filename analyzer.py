@@ -23,6 +23,17 @@ RATING_THUMBS_UP = 1
 RATING_THUMBS_DOWN = -1
 TIMESTAMP_UNIT = "s"
 
+# Display limits
+DAILY_DISPLAY_LIMIT = 14        # Show last N days
+WEEKLY_DISPLAY_LIMIT = 8        # Show last N weeks
+COMMENT_DISPLAY_LIMIT = 50      # Show up to N comments
+COMMENT_TRUNCATE_LENGTH = 150   # Truncate comments at N chars
+REASON_LABEL_WIDTH = 25         # Width for reason labels
+MODEL_LABEL_WIDTH = 35          # Width for model labels
+REPORT_WIDTH = 60               # Width of report separator lines
+BAR_WIDTH = 10                  # Width of horizontal bars
+DOW_BAR_HEIGHT = 5              # Height of day-of-week vertical bars
+
 # Logging setup
 logging.basicConfig(
     level=logging.INFO,
@@ -501,7 +512,7 @@ def generate_statistics(df: pd.DataFrame) -> dict:
     }
 
 
-def _format_bar(value: float, max_value: float, width: int = 10) -> str:
+def _format_bar(value: float, max_value: float, width: int = BAR_WIDTH) -> str:
     """Create a visual bar representation."""
     if max_value == 0:
         return " " * width
@@ -527,7 +538,7 @@ def _format_date_short(iso_date: str, include_year: bool = True) -> str:
 
 def print_statistics(stats: dict) -> None:
     """Print statistics in a readable format."""
-    width = 60
+    width = REPORT_WIDTH
 
     print("\n" + "=" * width)
     print("FEEDBACK DATA STATISTICS".center(width))
@@ -577,8 +588,8 @@ def print_statistics(stats: dict) -> None:
                 display_r = r
             count = count or 0
             rate = reason["thumbs_up_rate_by_reason"].get(r, 0)
-            label = str(display_r)[:25]
-            print(f"  {label:<27} {count:>5}  ({rate:>5.1%} +)  {_format_bar(count, max_count)}")
+            label = str(display_r)[:REASON_LABEL_WIDTH]
+            print(f"  {label:<{REASON_LABEL_WIDTH + 2}} {count:>5}  ({rate:>5.1%} +)  {_format_bar(count, max_count)}")
 
     # Model Analysis (only show if multiple models)
     model = stats["model_analysis"]
@@ -594,8 +605,8 @@ def print_statistics(stats: dict) -> None:
                 display_m = m
             count = count or 0
             rate = model["thumbs_up_rate_by_model"].get(m, 0)
-            label = str(display_m)[:35]
-            print(f"  {label:<37} {count:>5}  ({rate:>5.1%} +)  {_format_bar(count, max_count)}")
+            label = str(display_m)[:MODEL_LABEL_WIDTH]
+            print(f"  {label:<{MODEL_LABEL_WIDTH + 2}} {count:>5}  ({rate:>5.1%} +)  {_format_bar(count, max_count)}")
 
     # RAG Analysis
     rag = stats["rag_analysis"]
@@ -627,15 +638,15 @@ def print_statistics(stats: dict) -> None:
         for month, count in sorted(by_month.items()):
             print(f"  {month:<15} {count:>5}  {_format_bar(count, max_count)}")
 
-    # Weekly (last 8 weeks)
+    # Weekly (last N weeks)
     by_week = temporal.get("by_week", {})
     if by_week:
         sorted_weeks = sorted(by_week.items())
-        recent_weeks = sorted_weeks[-8:]  # Last 8 weeks
+        recent_weeks = sorted_weeks[-WEEKLY_DISPLAY_LIMIT:]
         if recent_weeks:
             total_weeks = len(sorted_weeks)
             header = f"WEEKLY ACTIVITY (last {len(recent_weeks)}"
-            if total_weeks > 8:
+            if total_weeks > WEEKLY_DISPLAY_LIMIT:
                 header += f" of {total_weeks}"
             header += " weeks)"
             print(f"\n{header}")
@@ -643,15 +654,15 @@ def print_statistics(stats: dict) -> None:
             for week, count in recent_weeks:
                 print(f"  {week:<15} {count:>5}  {_format_bar(count, max_count)}")
 
-    # Daily (last 14 days)
+    # Daily (last N days)
     by_date = temporal.get("by_date", {})
     if by_date:
         sorted_dates = sorted(by_date.items())
-        recent_dates = sorted_dates[-14:]  # Last 14 days
+        recent_dates = sorted_dates[-DAILY_DISPLAY_LIMIT:]
         if recent_dates:
             total_days = len(sorted_dates)
             header = f"DAILY ACTIVITY (last {len(recent_dates)}"
-            if total_days > 14:
+            if total_days > DAILY_DISPLAY_LIMIT:
                 header += f" of {total_days}"
             header += " days)"
             print(f"\n{header}")
@@ -674,9 +685,8 @@ def print_statistics(stats: dict) -> None:
         # Count row
         print("  " + "".join(f"{c:>6}" for c in counts))
         # Bar row
-        bar_height = 5
-        for row in range(bar_height, 0, -1):
-            threshold = (row / bar_height) * max_count
+        for row in range(DOW_BAR_HEIGHT, 0, -1):
+            threshold = (row / DOW_BAR_HEIGHT) * max_count
             bars = "".join(
                 f"{'  ##  ' if c >= threshold else '      '}"
                 for c in counts
@@ -724,11 +734,11 @@ def print_statistics(stats: dict) -> None:
         neg_comments = comments.get("negative_feedback_comments", [])
         if neg_comments:
             print(f"  Negative feedback comments ({len(neg_comments)}):")
-            for c in neg_comments[:50]:  # Show up to 50
-                comment_preview = str(c)[:150] + "..." if len(str(c)) > 150 else str(c)
+            for c in neg_comments[:COMMENT_DISPLAY_LIMIT]:
+                comment_preview = str(c)[:COMMENT_TRUNCATE_LENGTH] + "..." if len(str(c)) > COMMENT_TRUNCATE_LENGTH else str(c)
                 print(f"    - {comment_preview}")
-            if len(neg_comments) > 50:
-                print(f"    ... and {len(neg_comments) - 50} more")
+            if len(neg_comments) > COMMENT_DISPLAY_LIMIT:
+                print(f"    ... and {len(neg_comments) - COMMENT_DISPLAY_LIMIT} more")
 
     # Tag Analysis
     tags = stats.get("tag_analysis", {})
